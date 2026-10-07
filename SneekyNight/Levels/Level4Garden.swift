@@ -98,6 +98,8 @@ final class GardenModel {
         chase.award = { [weak self] in self?.award($0) }
         chase.onCaught = { [weak self] who, message in self?.caught(who, message) }
         chase.onGaveUp = { [weak self] who in self?.gaveUp(who) }
+        // Practice mode: the Guide leads you to the next place to go.
+        engine.guideGoal = { [weak self] in self?.guideGoal() }
         reset()
     }
 
@@ -130,6 +132,8 @@ final class GardenModel {
         engine.tauntOnly = false
         chase.reset()
         chase.waypoint = { from, to in GardenModel.nextStep(from: from, to: to) }
+        // The Guide follows the maze paths too.
+        engine.guideWaypoint = { from, to in GardenModel.nextStep(from: from, to: to) }
         engine.crouching = false
         engine.facingRight = true
         engine.bubble = nil
@@ -394,6 +398,7 @@ final class GardenModel {
             area = .beyond
             hidingIn = nil
             chase.waypoint = nil
+            engine.guideWaypoint = nil
             chase.playerChangedRoom(entry: CGPoint(x: 110, y: 600))
             engine.load(SceneLayout(width: Self.beyondWidth, floor: HallwayModel.floor, things: Self.beyondThings(), spawn: CGPoint(x: 210, y: 610)))
             engine.timeLeft += 60
@@ -688,6 +693,18 @@ final class GardenModel {
     private func closePopup() {
         withAnimation { popup = nil }
         engine.running = phase == .sneaking || phase == .warning
+    }
+
+    /// Practice mode: the Guide leads you to the nearest thirsty plant, then the pests, then the gate.
+    /// Beyond the gate: the spots with keys, then the street gate.
+    private func guideGoal() -> CGPoint? {
+        if area == .maze {
+            if allDone { return engine.spot("gate") }
+            if watered < Self.plantCount { return engine.nearestSpot { $0.kind == "plant" && !$0.open } }
+            return engine.nearestSpot { $0.kind == "pest" }
+        }
+        if keys < 3, let spot = engine.things.first(where: { keySpots.contains($0.id) && !$0.open }) { return spot.pos }
+        return engine.spot("streetGate")
     }
 
     func hint() {

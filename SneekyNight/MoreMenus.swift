@@ -51,6 +51,11 @@ struct SettingsView: View {
                         }
                         group("Other") {
                             toggle("Show my name above my character", $settings.nameTag)
+                            // The ID the Guide's Hat is given to (see `GuidesHat.devices`).
+                            Text("Device ID: \(GuidesHat.deviceID)")
+                                .font(.game(13, .medium))
+                                .foregroundStyle(.white.opacity(0.5))
+                                .textSelection(.enabled)
                         }
                     }
                     .frame(width: 760)
@@ -394,7 +399,188 @@ struct LoreView: View {
     @Environment(GameState.self) private var game
     let onBack: () -> Void
     @State private var page = 0
-    @State private var facts = false
+    @State private var category = Category.story
+
+    /// The Lore is split into categories. Items and accessories each have their own.
+    enum Category: String, CaseIterable {
+        case story = "Story", characters = "Characters", items = "Items", accessories = "Accessories", facts = "Fun facts"
+
+        var symbol: String {
+            switch self {
+            case .story: "book.fill"
+            case .characters: "person.3.fill"
+            case .items: "backpack.fill"
+            case .accessories: "crown.fill"
+            case .facts: "lightbulb.fill"
+            }
+        }
+    }
+
+    typealias Entry = (title: String, symbol: String, color: Color, text: String)
+
+    /// Everyone you meet, in the story levels and in the Level Maker.
+    static let characters: [Entry] = [
+        ("You", "figure.wave", .yellow,
+         "A kid with a promise to keep and a very quiet pair of slippers. You've learned to crouch past lamps, hide in closets and taunt at exactly the wrong moment."),
+        ("Mom", "heart.fill", .pink,
+         "Sleeps lightly, wakes at one creak, and remembers only one passcode: 12345. In Level 5 she's up before the sun, cooking breakfast. Try to grab her while you're untouchable and she'll swear you're a ghost."),
+        ("Dad", "mustache.fill", .blue,
+         "A night owl with cold cocoa. He checks Mom's room every 9 to 15 seconds and the garden every two minutes, and laughs once per chase if you taunt him."),
+        ("Your brother", "teddybear.fill", .green,
+         "Leaves squeaky toys everywhere and lends you his favourite one. If he's following you when Mom catches up, he throws his toy at her. Once."),
+        ("The Guide", "lightbulb.fill", GuidesHat.color,
+         "Turns up in practice mode with a lantern that never goes out. Now he walks right into the room and says \"Follow me!\", then leads you to the next place you need to go. His hat is said to hold ten and a half times his power."),
+        ("Grandpa", "figure.walk.motion", .orange,
+         "The reason for everything. His knees won't make the trip to the Lantern Festival this year, so you promised to bring a lantern home for him."),
+        ("The snack dog", "pawprint.fill", .brown,
+         "The dog next door, with the blue key on his collar. Two snacks and he's your best friend."),
+        ("The gate dogs", "dog.fill", .brown,
+         "Guard the garden gate in Level 4. They come and go about every 10 seconds and grumble if you stand too close."),
+        ("Uncle", "car.fill", .orange,
+         "Runs the night shift at the hotel downtown. His room is somewhere upstairs, and it's never on the same floor twice. He'll drive you to the next city... eventually."),
+        ("Strangers", "figure.walk", .gray,
+         "Wander Level 5's street. Touch one and it's 20 HP. Jump over them or wait in a bus stop."),
+        ("Hotel guards and workers", "flashlight.on.fill", .indigo,
+         "Guards walk in front of the hotel, workers in the lobby. They only see what's in front of them, and much less far if you crouch."),
+        ("Rats", "hare.fill", .gray,
+         "Show up while you carry snacks. Each one steals a snack and leaves a present: an accessory, and 1 time in 10 a boost."),
+        ("The owl", "bird.fill", .teal,
+         "Lives by the chimney on the roof. It winks at you. Nobody knows why."),
+        ("Level Maker friends", "hammer.fill", .purple,
+         "Uncle, a Friend, a friendly Ghost, the Guide, Guards and Workers can only be placed in your own levels. Give each of them their own line."),
+    ]
+
+    /// Permanent items, keys and things you pick up.
+    static let items: [Entry] = [
+        ("Vines (V)", "leaf.arrow.triangle.circlepath", .green,
+         "From the strange sparkly bush in the garden maze. Tangles up a grown-up for 10 seconds. Ready again after 35."),
+        ("Brother's toy (G)", "teddybear.fill", .pink,
+         "Your reward for being nice. Stuns Mom for a whole minute. Ready again after 50 seconds."),
+        ("The bat (B)", "figure.baseball", .orange,
+         "1 search in 12 finds it. A quick bonk: Mom sees stars for 2 seconds, ready again after 5."),
+        ("Lightning Ball power (F)", "bolt.fill", .yellow,
+         "25 seconds of speed, dash and jump ×3.5, and quieter steps. 1 minute to recharge."),
+        ("Cloud ride (X)", "cloud.fill", Color(red: 0.6, green: 0.8, blue: 1),
+         "10 seconds of flying over everything, even the garden hedges. 30 seconds to rest."),
+        ("Zoom Slippers and Spring Socks", "shoe.fill", .cyan,
+         "In the hallway drawers: faster feet and higher jumps, for the rest of Level 2."),
+        ("Silent Slippers", "shoeprints.fill", .purple,
+         "Under Mom's bed. One free bump: the next obstacle you touch makes no sound."),
+        ("Keys", "key.fill", Palette.gold,
+         "Under tables, in lockboxes, on window ledges, made from metal scraps at the workbench, and on a dog's collar. The blue one opens Uncle's door."),
+        ("Skill papers", "doc.text.fill", .white,
+         "Every 4th box search has one until you know Dash (Q) and Run (Shift)."),
+        ("Star balls", "star.circle.fill", .yellow,
+         "On the roof. +6% speed each for the rest of Level 3, up to +60%."),
+        ("Orbs", "circle.hexagongrid.fill", .cyan,
+         "Mined from glowing rocks in the dungeon and spent at the Orb Shop."),
+        ("The golden stick", "questionmark", Palette.gold,
+         "Very, very rare. It's on the roof... sometimes."),
+        ("The hotel elevator", "arrow.up.arrow.down.square.fill", .orange,
+         "Ten floor buttons and no hints. Uncle's room could be on any of them."),
+    ]
+
+    var body: some View {
+        ZStack {
+            NightSky()
+            VStack(spacing: 16) {
+                MenuHeader(title: "Lore", onBack: onBack)
+                if game.loreUnlocked {
+                    HStack(alignment: .top, spacing: 20) {
+                        switch category {
+                        case .story: storyCard
+                        case .facts: factsCard
+                        case .characters: entriesCard("Characters", Self.characters)
+                        case .items: entriesCard("Items", Self.items)
+                        case .accessories: entriesCard("Accessories", accessoryEntries)
+                        }
+                        VStack(spacing: 10) {
+                            ForEach(Category.allCases, id: \.self) { kind in
+                                categoryButton(kind)
+                            }
+                        }
+                        .frame(width: 180)
+                    }
+                } else {
+                    locked
+                }
+                Spacer()
+            }
+            .padding(30)
+        }
+    }
+
+    /// Accessories: every boost (with what it does), every kind of accessory, and the demo exclusives.
+    private var accessoryEntries: [Entry] {
+        var list: [Entry] = Boost.findable.map { boost in
+            (boost.name + (game.boosts.contains(boost) ? "  ✓" : ""), boost.symbol, boost.color, "Boost. \(boost.about)")
+        }
+        list.append(game.boosts.contains(.guidesHat)
+            ? (Boost.guidesHat.name + "  ✓", Boost.guidesHat.symbol, Boost.guidesHat.color, "Boost. \(Boost.guidesHat.about) The chance of finding it is exactly zero. Yours was a gift.")
+            : ("???", "questionmark", GuidesHat.color, "A boost that can't be found, bought or won. The chance is exactly zero. Only the Guide knows who gets one."))
+        var families: [Accessory.Family] = []
+        for item in Accessory.all where !families.contains(item.family) { families.append(item.family) }
+        for family in families {
+            let kinds = Accessory.all.filter { $0.family == family }
+            let owned = kinds.filter { game.accessories.contains($0) }.count
+            let names: [Accessory.Family: String] = [
+                .glasses: "Glasses", .crown: "Crown", .bowTie: "Bow Ties", .scarf: "Scarves", .cape: "Capes", .headband: "Headbands",
+                .catEars: "Cat Ears", .headphones: "Headphones", .halo: "Halo", .partyHat: "Party Hats", .beanie: "Beanies",
+                .topHat: "Top Hats", .hairBow: "Hair Bows", .flower: "Flowers",
+            ]
+            list.append((names[family] ?? family.rawValue, kinds[0].symbol, kinds[0].color == .black ? .white : kinds[0].color,
+                         "Accessory. \(kinds.count) colour\(kinds.count == 1 ? "" : "s") to find in boxes and from rats. You have \(owned)."))
+        }
+        list.append(("Demo exclusives", "sparkles", .cyan,
+                     "Six accessories sold only in the dungeon's Orb Shop, 40 orbs each: \(Accessory.exclusives.map(\.name).joined(separator: ", "))."))
+        return list
+    }
+
+    private func entriesCard(_ title: String, _ entries: [Entry]) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(title)
+                    .font(.game(34, .heavy))
+                    .foregroundStyle(.white)
+                ForEach(entries.indices, id: \.self) { i in
+                    let entry = entries[i]
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: entry.symbol)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(entry.color)
+                            .frame(width: 42, height: 42)
+                            .background(.white.opacity(0.1), in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(entry.title).font(.game(22, .heavy)).foregroundStyle(.white)
+                            Text(entry.text)
+                                .font(.game(18, .medium))
+                                .foregroundStyle(.white.opacity(0.88))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+            .padding(26)
+        }
+        .frame(width: 760, height: 470)
+        .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 28))
+        .overlay(RoundedRectangle(cornerRadius: 28).stroke(Palette.gold.opacity(0.5), lineWidth: 3))
+    }
+
+    private func categoryButton(_ kind: Category) -> some View {
+        Button {
+            SoundPlayer.shared.tap()
+            category = kind
+        } label: {
+            Label(kind.rawValue, systemImage: kind.symbol)
+                .font(.game(19))
+                .foregroundStyle(category == kind ? .black : .white)
+                .frame(width: 170, height: 52)
+                .background(category == kind ? AnyShapeStyle(Palette.gold.gradient) : AnyShapeStyle(.white.opacity(0.14)),
+                            in: RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(PressableStyle())
+    }
 
     static let pages: [(title: String, symbol: String, text: String)] = [
         ("Why sneak out?", "moon.stars.fill",
@@ -428,31 +614,6 @@ struct LoreView: View {
         "Dungeon speed upgrades go up to ×5.7, but the game stops you getting too fast to steer.",
         "Too many boosts on your head? Tap the eye in Customize to hide them. They still work.",
     ]
-
-    var body: some View {
-        ZStack {
-            NightSky()
-            VStack(spacing: 16) {
-                MenuHeader(title: "Lore", onBack: onBack)
-                if game.loreUnlocked {
-                    HStack(alignment: .top, spacing: 20) {
-                        if facts { factsCard } else { storyCard }
-                        VStack(spacing: 12) {
-                            sideButton(facts ? "Story" : "Fun facts", facts ? "book.fill" : "lightbulb.fill") { facts.toggle() }
-                            Text(facts ? "Back to the story." : "Tips to play better.")
-                                .font(.game(15, .semibold))
-                                .foregroundStyle(.white.opacity(0.7))
-                        }
-                        .frame(width: 180)
-                    }
-                } else {
-                    locked
-                }
-                Spacer()
-            }
-            .padding(30)
-        }
-    }
 
     private var storyCard: some View {
         let current = Self.pages[page]
@@ -527,23 +688,6 @@ struct LoreView: View {
         .overlay(RoundedRectangle(cornerRadius: 28).stroke(Palette.gold.opacity(0.5), lineWidth: 3))
     }
 
-    private func sideButton(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button {
-            SoundPlayer.shared.tap()
-            action()
-        } label: {
-            VStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 40, weight: .bold))
-                Text(title).font(.game(24))
-            }
-            .foregroundStyle(.black)
-            .frame(width: 170, height: 130)
-            .background(Palette.gold.gradient, in: RoundedRectangle(cornerRadius: 26))
-            .shadow(color: .black.opacity(0.35), radius: 8, y: 5)
-        }
-        .buttonStyle(PressableStyle())
-    }
-
     private var locked: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -579,6 +723,18 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Sneeky Nights: better performance and more fun", [
+            "The game runs smoother: less work every frame when drawing rooms and checking what's next to you.",
+            "The Level Maker has no limits now: as many objects and hazards as you like, and levels as long as you like.",
+            "Creative mode: status commands stack (press Speed ×2 three times for ×8), and there are 10 new commands (55 in all).",
+            "Creative mode gives you immortality and the untouchable buff. Mom gets very confused when she can't grab you... and sometimes thinks you're a ghost!",
+            "The Lore has grown: every character, plus Items and Accessories in their own categories.",
+            "Uncle's hotel: the first floor is now the lobby. Take the elevator (10 floors) to find Uncle's room. It's somewhere different every try, and there are no hints... except from the Guide in practice mode.",
+            "Level Maker only characters: Uncle, a Friend, a friendly Ghost, the Guide, Guards and Workers. And creative mode works on your own levels (switch it on in the editor).",
+            "A new boosting accessory: the Guide's Hat. Press H to switch it on or off: everything ×10.5, and you walk through things. The chance of finding it is exactly zero.",
+            "In practice mode the Guide walks with you: \"Follow me!\" He leads you to the right place.",
+            "Fixed the crouch animation: your feet stay on the floor and the legs don't flicker any more.",
+        ]),
         ("Level 5 update", [
             "Level 5: The Street. Feed 15 dogs, dodge strangers (you have HP now!), trade with rats, and reach Uncle's hotel.",
             "New side level: The Dungeon. Mine orbs, buy upgrades (speed up to ×5.7), accessories and demo exclusives.",

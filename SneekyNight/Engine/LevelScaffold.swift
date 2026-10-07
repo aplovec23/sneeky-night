@@ -23,6 +23,8 @@ struct LevelScaffold<World: View, Extra: View>: View {
     var chase: Chase?
     /// What the Guide says in practice mode, in order.
     var guideTips: [String] = []
+    /// Creative mode works here even when it isn't unlocked yet (your own Level Maker levels, when you switch it on there).
+    var creativeHere = false
     let onHome: () -> Void
     let onRestart: () -> Void
     let onHint: () -> Void
@@ -54,6 +56,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                 VStack(spacing: 0) {
                     ZStack(alignment: .topLeading) {
                         world()
+                        GuideWalker(engine: engine).allowsHitTesting(false)
                         bubble
                     }
                     .frame(width: engine.width, height: engine.height, alignment: .topLeading)
@@ -132,7 +135,12 @@ struct LevelScaffold<World: View, Extra: View>: View {
             .animation(.easeOut(duration: 0.2), value: pauseOpen)
             .onAppear {
                 engine.viewWidth = viewWidth
-                engine.creative = game.creativeActive
+                engine.creative = game.creativeActive || creativeHere
+                // Creative mode comes with immortality and the untouchable buff (the admin panel can switch them off).
+                if engine.creative {
+                    engine.godMode = true
+                    engine.ghost = true
+                }
                 engine.multiplayer = game.multiplayer
                 engine.placePlayer2()
                 if game.multiplayer { game.award(.multiplayer) }
@@ -258,9 +266,12 @@ struct LevelScaffold<World: View, Extra: View>: View {
                 ForEach(items, id: \.self) { item in
                     let wait = belt.cooldowns[item] ?? 0
                     ActionButton(key: item.key, symbol: item.symbol, size: (items.count > 2 ? 56 : 62) * k,
-                                 color: wait > 0 ? Color(white: 0.3) : item.color) { belt.use(item) }
+                                 color: wait > 0 || (item == .hat && !belt.hatOn) ? Color(white: 0.3) : item.color) { belt.use(item) }
                         .overlay {
-                            if item == .cloud && engine.flying {
+                            if item == .hat {
+                                Text(belt.hatOn ? "ON" : "OFF").font(.game(16, .heavy)).foregroundStyle(belt.hatOn ? .yellow : .white.opacity(0.8))
+                                    .offset(y: 22)
+                            } else if item == .cloud && engine.flying {
                                 Text("\(Int(engine.flyLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.white)
                             } else if item == .lightning && belt.lightningLeft > 0 {
                                 Text("\(Int(belt.lightningLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.yellow)
@@ -539,6 +550,8 @@ struct FloorLayer<ThingView: View>: View {
         // Only what's near the screen is drawn (the maze has hundreds of things).
         let view = CGRect(x: engine.camera - 260, y: engine.cameraY - 160, width: engine.viewWidth + 520, height: 1120)
         let floorThings = engine.things.filter { $0.onFloor && !$0.hidden && view.contains($0.pos) }
+        // Looked up by id while drawing (faster than searching the list for every thing).
+        let byID = Dictionary(floorThings.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         // Hiding under a table draws you behind it.
         let playerY = engine.coverY.map { $0 - 1 } ?? engine.player.y
         let second: [(String, CGFloat)] = engine.player2.map { [("player2", $0.y)] } ?? []
@@ -549,7 +562,7 @@ struct FloorLayer<ThingView: View>: View {
                     PlayerSprite(engine: engine, look: look, name: name, opacity: playerOpacity)
                 } else if id == "player2", let spot = engine.player2 {
                     PlayerTwoSprite(engine: engine, firstLook: look).anchored(at: spot)
-                } else if let thing = floorThings.first(where: { $0.id == id }) {
+                } else if let thing = byID[id] {
                     // Things dropped in by creative mode look the same in every level.
                     if thing.id.hasPrefix("admin-") {
                         Group {

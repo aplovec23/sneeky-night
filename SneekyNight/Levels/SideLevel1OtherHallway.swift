@@ -62,6 +62,8 @@ final class OtherHallwayModel {
         chase.award = { [weak self] in self?.award($0) }
         chase.onCaught = { [weak self] who, message in self?.caught(message) }
         chase.onGaveUp = { [weak self] _ in self?.gaveUp() }
+        // Practice mode: the Guide leads you to the next place to go.
+        engine.guideGoal = { [weak self] in self?.guideGoal() }
         reset()
     }
 
@@ -292,6 +294,13 @@ final class OtherHallwayModel {
     private func closePopup() {
         withAnimation { popup = nil }
         engine.running = phase == .sneaking
+    }
+
+    /// Practice mode: the Guide leads you to the boxes with keys, then the door, then the chest.
+    private func guideGoal() -> CGPoint? {
+        if room == .secretRoom { return engine.spot("chest") }
+        if keys < Self.keyCount, let box = engine.things.first(where: { keyBoxes.contains($0.id) }) { return box.pos }
+        return engine.spot("secretDoor")
     }
 
     func hint() {

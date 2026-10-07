@@ -49,6 +49,11 @@ final class BedroomModel {
         engine.onItemKey = { [weak self] i in
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
+        // Practice mode: the Guide leads you to the table, then the lockbox, then the door.
+        engine.guideGoal = { [weak self] in
+            guard let self else { return nil }
+            return engine.spot(has(Self.doorKey) ? "door" : has(Self.smallKey) ? "bed" : "table")
+        }
         reset()
     }
 

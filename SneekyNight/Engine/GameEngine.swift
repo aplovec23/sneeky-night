@@ -164,6 +164,8 @@ final class GameEngine {
     var flyLeft: Double = 0
     /// Creative mode: walk through things.
     var noclip = false
+    /// The Guide's Hat is on: you walk through things too.
+    var phasing = false
     /// Creative mode: grown-ups can't catch you.
     var ghost = false
     /// Nobody can catch or hurt you: practice mode, or the creative "ghost" command.
@@ -172,6 +174,18 @@ final class GameEngine {
     var sizeScale: CGFloat = 1
     /// Creative mode is on: you wear the creative crown and get the admin panel.
     var creative = false
+
+    /// Practice mode: the Guide walks in the room and leads you to the next place to go.
+    var guidePos: CGPoint?
+    var guideWalking = false
+    var guideFacingRight = true
+    var guideSpeech: String?
+    /// The spot the Guide is heading for (set by the level). Nil: he just walks along with you.
+    @ObservationIgnored var guideGoal: () -> CGPoint? = { nil }
+    /// For mazes: the next spot on the way from A to B, so the Guide follows the paths.
+    @ObservationIgnored var guideWaypoint: ((CGPoint, CGPoint) -> CGPoint)?
+    @ObservationIgnored private var guideTalk = 0.0
+    @ObservationIgnored private var guideArrived = false
 
     /// Two players on one iPad: player 2 walks around with their own joystick and can use things.
     var multiplayer = false
@@ -245,6 +259,8 @@ final class GameEngine {
         flyLeft = 0
         loads += 1
         placePlayer2()
+        guidePos = nil
+        guideArrived = false
     }
 
     /// Puts player 2 next to player 1 (or takes them away when multiplayer is off).
@@ -307,6 +323,15 @@ final class GameEngine {
     }
 
     func index(of id: String) -> Int? { things.firstIndex { $0.id == id } }
+
+    /// Where a thing in this room stands (nil when it isn't here or is hidden). Used for the Guide's "follow me".
+    func spot(_ id: String) -> CGPoint? { things.first { $0.id == id && !$0.hidden }?.pos }
+
+    /// The closest thing (to you) that matches, for the Guide's "follow me".
+    func nearestSpot(where match: (Thing) -> Bool) -> CGPoint? {
+        things.filter { !$0.hidden && match($0) }
+            .min { hypot($0.pos.x - player.x, $0.pos.y - player.y) < hypot($1.pos.x - player.x, $1.pos.y - player.y) }?.pos
+    }
 
     // MARK: Actions (keyboard or on-screen buttons)
 
@@ -442,6 +467,7 @@ final class GameEngine {
         updateCover()
         updateNoise(dt)
         onTick(dt)
+        updateGuide(dt)
 
         if pressed.contains(.keyE) { interact() }
         if pressed.contains(.spacebar) { jump() }
@@ -504,6 +530,7 @@ final class GameEngine {
         if pressed.contains(.keyG) { onItemKey(2) }
         if pressed.contains(.keyB) { onItemKey(3) }
         if pressed.contains(.keyX) { onItemKey(4) }
+        if pressed.contains(.keyH) { onItemKey(5) }
     }
 
     private func updateTimers(_ dt: Double) {
@@ -558,8 +585,9 @@ final class GameEngine {
         input = v
         if hidden || crouching || frozen { v = .zero }
 
-        // Boosts stack, but anything past 1100 is too fast to steer.
-        var speed: CGFloat = min(1100, (speedBoost ? 440 : 290) * (1 + speedBonus) * speedMult)
+        // Boosts stack, but anything past 1100 is too fast to steer (creative mode and the Guide's Hat go further).
+        let cap: CGFloat = creative || phasing ? 3200 : 1100
+        var speed: CGFloat = min(cap, (speedBoost ? 440 : 290) * (1 + speedBonus) * speedMult)
         if ducking { speed *= 0.5 } else if run { speed *= 1.5 }
         if dashTime > 0 {
             v = dashDirection
@@ -650,27 +678,97 @@ final class GameEngine {
     }
 
     private func updateNearest() {
-        let close = things.indices.filter {
-            let t = things[$0]
-            return t.prompt != nil && !t.hidden && t.id != carrying
-                && abs(t.pos.x - player.x) <= t.reach.width && abs(t.pos.y - player.y) <= t.reach.height
+        // One pass, no temporary arrays: this runs every frame.
+        var best: Int?
+        var bestDistance = CGFloat.infinity
+        for i in things.indices {
+            let t = things[i]
+            guard t.prompt != nil, !t.hidden, t.id != carrying else { continue }
+            let dx = abs(t.pos.x - player.x)
+            guard dx <= t.reach.width, abs(t.pos.y - player.y) <= t.reach.height, dx < bestDistance else { continue }
+            best = i
+            bestDistance = dx
         }
-        let best = close.min { abs(things[$0].pos.x - player.x) < abs(things[$1].pos.x - player.x) }
         if best != nearest { nearest = best }
     }
 
     private func blocked(_ p: CGPoint) -> Bool {
-        if flying || noclip { return false }
+        if flying || noclip || phasing { return false }
         let pad = CGSize(width: 6, height: 0)
         // In the air you clear small things like boxes.
         return things.contains { $0.solid && !$0.hidden && $0.id != carrying && !(z > 24 && $0.movable) && $0.covers(p, pad: pad) }
     }
 
+    // MARK: The Guide (practice mode)
+
+    /// "Follow me!": the Guide waits for you, then walks a little ahead toward the next place to go.
+    private func updateGuide(_ dt: Double) {
+        guard Settings.shared.practice else {
+            if guidePos != nil { guidePos = nil; guideSpeech = nil }
+            return
+        }
+        var pos = guidePos ?? CGPoint(x: min(max(player.x - 120, 40), width - 40), y: min(player.y + 10, floor.upperBound))
+        if guideTalk > 0 {
+            guideTalk -= dt
+            if guideTalk <= 0 { guideSpeech = nil }
+        }
+        let goal = guideGoal()
+        var target: CGPoint
+        if let goal {
+            let goalSpot = CGPoint(x: min(max(goal.x, 40), width - 40), y: min(max(goal.y, floor.lowerBound), floor.upperBound))
+            let toGoal = hypot(goalSpot.x - pos.x, goalSpot.y - pos.y)
+            let fromPlayer = hypot(player.x - pos.x, player.y - pos.y)
+            if fromPlayer > 360 {
+                // You fell behind: he comes back for you.
+                target = CGPoint(x: player.x + (goalSpot.x > player.x ? 90 : -90), y: player.y)
+                if guideSpeech == nil { guideSay(["Follow me!", "This way!", "Come on, over here!"].randomElement()!) }
+            } else if toGoal > 40 {
+                // Stay a little ahead of you on the way there.
+                let dir: CGFloat = goalSpot.x >= player.x ? 1 : -1
+                let ahead = CGPoint(x: player.x + dir * 170, y: goalSpot.y)
+                target = abs(goalSpot.x - player.x) < 170 ? goalSpot : ahead
+                if !guideArrived && guideSpeech == nil && Int.random(in: 0..<240) == 0 { guideSay("Follow me!") }
+            } else {
+                target = goalSpot
+            }
+            let arrived = toGoal < 50 && fromPlayer < 140
+            if arrived && !guideArrived { guideSay("Here! This is the place.") }
+            guideArrived = arrived
+        } else {
+            target = CGPoint(x: player.x - (facingRight ? 110 : -110), y: player.y)
+            guideArrived = false
+        }
+        target.x = min(max(target.x, 40), width - 40)
+        target.y = min(max(target.y, floor.lowerBound), floor.upperBound)
+        if let guideWaypoint { target = guideWaypoint(pos, target) }
+        let dx = target.x - pos.x, dy = target.y - pos.y
+        let distance = hypot(dx, dy)
+        let moving = distance > 12
+        if moving {
+            let step = min(distance, 330 * CGFloat(dt))
+            pos.x += dx / distance * step
+            pos.y += dy / distance * step
+            if abs(dx) > 4, (dx > 0) != guideFacingRight { guideFacingRight = dx > 0 }
+        }
+        if moving != guideWalking { guideWalking = moving }
+        if pos != guidePos { guidePos = pos }
+    }
+
+    private func guideSay(_ text: String) {
+        guideSpeech = text
+        guideTalk = 2.6
+    }
+
+    private static let watchedKeys: [GCKeyCode] = [.keyW, .keyA, .keyS, .keyD, .upArrow, .downArrow, .leftArrow, .rightArrow,
+                                                   .keyE, .keyR, .keyC, .keyT, .keyQ, .keyV, .keyF, .keyG, .keyB, .keyX, .keyH, .keyP,
+                                                   .escape, .leftShift, .rightShift, .spacebar, .returnOrEnter]
+
     private func pressedKeys() -> Set<GCKeyCode> {
+        // No keyboard (most iPads and iPhones): nothing to check.
         guard let keyboard = GCKeyboard.coalesced?.keyboardInput else { return [] }
-        let watched: [GCKeyCode] = [.keyW, .keyA, .keyS, .keyD, .upArrow, .downArrow, .leftArrow, .rightArrow,
-                                    .keyE, .keyR, .keyC, .keyT, .keyQ, .keyV, .keyF, .keyG, .keyB, .keyX, .keyP, .escape, .leftShift, .rightShift, .spacebar, .returnOrEnter]
-        return Set(watched.filter { keyboard.button(forKeyCode: $0)?.isPressed == true })
+        var keys = Set<GCKeyCode>()
+        for key in Self.watchedKeys where keyboard.button(forKeyCode: key)?.isPressed == true { keys.insert(key) }
+        return keys
     }
 }
 

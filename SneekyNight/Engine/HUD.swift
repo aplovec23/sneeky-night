@@ -72,11 +72,12 @@ struct HealthBar: View {
 /// The Guide: he turns up in practice mode to help you through a level.
 struct GuideView: View {
     static let look = Look(gender: .boy, skin: 2, shirt: 7, pattern: 3, cap: 0,
-                           accessory: Accessory(id: "guide-hat", family: .topHat, name: "Guide's Hat", color: Color(red: 0.45, green: 0.25, blue: 0.75)))
+                           accessory: Accessory(id: "guide-hat", family: .topHat, name: "Guide's Hat", color: GuidesHat.color))
+    var walking = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            CharacterView(look: Self.look, facingRight: true)
+            CharacterView(look: Self.look, facingRight: true, walking: walking)
             // His lantern
             VStack(spacing: 0) {
                 Rectangle().fill(Color(white: 0.3)).frame(width: 3, height: 14)
@@ -89,6 +90,24 @@ struct GuideView: View {
             .offset(x: 14, y: -34)
         }
         .frame(width: 100, height: 160)
+    }
+}
+
+/// Practice mode: the Guide himself, walking in the room ahead of you. "Follow me!"
+struct GuideWalker: View {
+    let engine: GameEngine
+
+    var body: some View {
+        if let spot = engine.guidePos {
+            GuideView(walking: engine.guideWalking)
+                .scaleEffect(x: engine.guideFacingRight ? 0.92 : -0.92, y: 0.92, anchor: .bottom)
+                .opacity(0.92)
+                .anchored(at: spot)
+            if let text = engine.guideSpeech {
+                SpeechBubble(text: text, tint: GuidesHat.color, small: true)
+                    .position(x: spot.x, y: spot.y - 215)
+            }
+        }
     }
 }
 

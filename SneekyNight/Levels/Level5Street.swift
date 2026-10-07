@@ -25,12 +25,13 @@ struct Walker: Identifiable {
 /// touch them (jump over them, or hide in a bus stop). Feed all 15 dogs: snacks come from the
 /// fridge at home, 5 at a time, and Mom is in the kitchen cooking an early breakfast — sneak past
 /// while her back is turned, or crouch under a table. Rats take a snack and leave an accessory.
-/// Then get past the hotel guards and the workers in the lobby, open Uncle's door with the dog's
-/// blue key from Level 3, and ask him for a ride.
+/// Then get past the hotel guards and the workers in the lobby (the first floor), take the elevator
+/// and find Uncle's room: a different floor and door every try, and no hints (except from the Guide
+/// in practice mode). Open his door with the dog's blue key from Level 3, and ask him for a ride.
 @MainActor
 @Observable
 final class StreetModel {
-    enum Area { case street, kitchen, lobby, office }
+    enum Area { case street, kitchen, lobby, upstairs, office }
     enum Phase { case sneaking, over }
     enum Cooking { case atStove, toSink, atSink, toStove }
 
@@ -42,6 +43,13 @@ final class StreetModel {
     var banner: String?
     var hidingIn: String?
     var doorOpen = false
+    /// The elevator's floor buttons are on screen.
+    var elevatorOpen = false
+    /// The floor you're on (1 is the lobby).
+    var currentFloor = 1
+    /// Where Uncle's room is this time: a random floor (2–11) and one of the corridor's doors.
+    var uncleFloor = 2
+    var uncleDoorIndex = 0
     var snacks = 0
     var fed = 0
     var walkers: [Walker] = []
@@ -62,6 +70,11 @@ final class StreetModel {
     @ObservationIgnored private var saved: [Area: [Thing]] = [:]
     @ObservationIgnored private var streetWalkers: [Walker] = []
     @ObservationIgnored private var lobbyWalkers: [Walker] = []
+    /// Answers through the doors of the rooms that aren't Uncle's.
+    private static let wrongRoom = [
+        "Zzz... go away...", "Room service? We didn't order anything!", "Shh! The baby's asleep!",
+        "Who's there? ...Nobody? Okay.", "Not tonight, thank you!", "*loud snoring*",
+    ]
     @ObservationIgnored private var cookTime = 4.5
     @ObservationIgnored private var ratIn = 14.0
     @ObservationIgnored private var bannerTime = 0.0
@@ -71,7 +84,13 @@ final class StreetModel {
     static let streetWidth: CGFloat = 5600
     static let kitchenWidth: CGFloat = 1500
     static let lobbyWidth: CGFloat = 2400
+    static let corridorWidth: CGFloat = 2000
     static let officeWidth: CGFloat = 1000
+    /// The elevator's 10 buttons: floors 2 to 11. Floor 1 is the lobby.
+    static let floors = Array(2...11)
+    static let roomDoors: [CGFloat] = [520, 880, 1240, 1600]
+    /// Uncle's room number, e.g. 703.
+    var uncleRoom: Int { uncleFloor * 100 + uncleDoorIndex + 1 }
     static let dogCount = 15
     static let snackLoad = 5
     static let stove: CGFloat = 620
@@ -98,7 +117,23 @@ final class StreetModel {
         chase.award = { [weak self] in self?.award($0) }
         chase.onCaught = { [weak self] _, message in self?.caught(message) }
         chase.onGaveUp = { [weak self] _ in self?.gaveUp() }
+        // Practice mode: the Guide leads the way, all the way to Uncle's room.
+        engine.guideGoal = { [weak self] in self?.guideGoal() }
         reset()
+    }
+
+    private func guideGoal() -> CGPoint? {
+        switch area {
+        case .street:
+            if fed == Self.dogCount { return engine.spot("hotelDoor") }
+            if snacks == 0 { return engine.spot("houseDoor") }
+            return engine.nearestSpot { $0.kind == "dog" && !$0.open }
+        case .kitchen:
+            return snacks == 0 && fed < Self.dogCount ? engine.spot("fridge") : engine.spot("streetDoor")
+        case .lobby: return engine.spot("elevator")
+        case .upstairs: return currentFloor == uncleFloor ? engine.spot("uncleDoor") : engine.spot("elevator")
+        case .office: return engine.spot("uncle")
+        }
     }
 
     func apply(skills: Set<Skill>) {
@@ -141,6 +176,11 @@ final class StreetModel {
         bannerTime = 0
         hidingIn = nil
         doorOpen = false
+        elevatorOpen = false
+        currentFloor = 1
+        // A new hiding place for Uncle every try.
+        uncleFloor = Self.floors.randomElement()!
+        uncleDoorIndex = Int.random(in: 0..<Self.roomDoors.count)
         snacks = 0
         fed = 0
         momX = Self.stove
@@ -209,8 +249,30 @@ final class StreetModel {
             H.onWall("plant3", "plant", x: 1980, prompt: "Hide behind the plant", reach: 80),
             H.box("case1", x: 800, y: 660),
             H.box("case2", x: 1700, y: 600),
-            H.onWall("uncleDoor", "uncleDoor", x: 2270, prompt: "Unlock Uncle's door", reach: 90),
+            H.onWall("elevator", "elevator", x: 2250, prompt: "Take the elevator", reach: 100),
         ]
+    }
+
+    /// An upstairs corridor: the elevator, four room doors and a plant to hide behind.
+    func corridorThings(floor: Int) -> [Thing] {
+        var things = [
+            H.onWall("elevator", "elevator", x: 160, prompt: "Take the elevator", reach: 100),
+            H.onWall("plant1", "plant", x: 1060, prompt: "Hide behind the plant", reach: 80),
+        ]
+        for (i, x) in Self.roomDoors.enumerated() {
+            let number = floor * 100 + i + 1
+            if floor == uncleFloor && i == uncleDoorIndex {
+                things.append(H.onWall("uncleDoor", "uncleDoor", x: x, prompt: doorOpen ? "Go into room \(number)" : "Knock on room \(number)", reach: 90))
+            } else {
+                things.append(H.onWall("room\(number)", "roomDoor", x: x, prompt: "Knock on room \(number)", reach: 90))
+            }
+        }
+        return things
+    }
+
+    /// One worker walks each upstairs corridor, pushing a trolley of towels.
+    static func corridorWorker(floor: Int) -> [Walker] {
+        [Walker(id: 40 + floor, kind: .worker, pos: CGPoint(x: 1400, y: 640), range: 700...1850, speed: floor % 2 == 0 ? 95 : -95, style: floor)]
     }
 
     static func workers() -> [Walker] {
@@ -223,7 +285,7 @@ final class StreetModel {
 
     static func officeThings() -> [Thing] {
         [
-            H.onWall("lobbyBack", "lobbyBack", x: 110, prompt: "Back to the lobby"),
+            H.onWall("lobbyBack", "lobbyBack", x: 110, prompt: "Back to the corridor"),
             H.onWall("uncle", "uncle", x: 720, prompt: "Talk to Uncle", reach: 150),
         ]
     }
@@ -246,21 +308,30 @@ final class StreetModel {
             walkers = []
         case .lobby:
             width = Self.lobbyWidth
-            if from == .office { spawn = CGPoint(x: 2180, y: 610) }
+            if from == .upstairs { spawn = CGPoint(x: 2150, y: 610) }
             walkers = lobbyWalkers
+            currentFloor = 1
+        case .upstairs:
+            width = Self.corridorWidth
+            spawn = from == .office ? CGPoint(x: Self.roomDoors[uncleDoorIndex] + 60, y: 610) : CGPoint(x: 260, y: 610)
+            walkers = Self.corridorWorker(floor: currentFloor)
+            saved[.upstairs] = corridorThings(floor: currentFloor)
         case .office:
             width = Self.officeWidth
             walkers = []
         }
         engine.load(SceneLayout(width: width, floor: Self.floor, things: saved[newArea] ?? Self.streetThings(), spawn: spawn))
-        engine.facingRight = !(newArea == .street && from != .kitchen) && !(newArea == .lobby && from == .office)
+        engine.facingRight = !(newArea == .street && from != .kitchen) && !(newArea == .lobby && from == .upstairs)
         engine.noiseFactor = newArea == .kitchen ? 2 : 1
         hidingIn = nil
         area = newArea
         chase.playerChangedRoom(entry: spawn)
         switch newArea {
         case .kitchen: engine.say("Mom's cooking! I'll sneak past when her back is turned.", seconds: 3.2)
-        case .lobby: engine.say("The workers mustn't see me. Uncle's office is at the far end.", seconds: 3.2)
+        case .lobby where from == .street:
+            engine.say("The lobby! The workers mustn't see me. There's an elevator at the far end...", seconds: 3.2)
+        case .upstairs where from != .office:
+            engine.say("Floor \(currentFloor). Which room is Uncle's?", seconds: 2.4)
         default: break
         }
     }
@@ -272,6 +343,7 @@ final class StreetModel {
             return (CGPoint(x: max(160, engine.player.x - 720), y: 600), 3)
         case .kitchen: return (CGPoint(x: momX, y: 585), 0.6)
         case .lobby, .office: return (CGPoint(x: 150, y: 600), 4)
+        case .upstairs: return (CGPoint(x: 160, y: 600), 4)
         }
     }
 
@@ -283,7 +355,16 @@ final class StreetModel {
         case "busStop", "plant": toggleHiding(in: thing)
         case "houseDoor": go(to: .kitchen)
         case "streetDoor", "lobbyDoor": go(to: .street)
-        case "lobbyBack": go(to: .lobby)
+        case "lobbyBack": go(to: .upstairs)
+        case "elevator":
+            Sound.click.play()
+            engine.running = false
+            engine.walking = false
+            elevatorOpen = true
+        case "roomDoor":
+            Sound.door.play(volume: 0.4)
+            engine.addNoise(12)
+            engine.say("\"\(Self.wrongRoom.randomElement()!)\" ...Not Uncle's room.", seconds: 2.4)
         case "fridge": openFridge()
         case "dog": feed(i)
         case "box": engine.say("A guest's suitcase. Better leave it.")
@@ -299,14 +380,33 @@ final class StreetModel {
                 doorOpen = true
                 Sound.unlock.play()
                 inventory.removeAll { $0 == Self.blueKey }
-                engine.things[i].prompt = "Go into Uncle's office"
-                engine.say("The dog's blue key fits!")
+                engine.things[i].prompt = "Go into room \(uncleRoom)"
+                engine.say("Uncle's voice: \"Who's there?\" It's his room! And the dog's blue key fits!", seconds: 3)
             } else {
                 go(to: .office)
             }
         case "uncle": talkToUncle()
         default: break
         }
+    }
+
+    /// A button in the elevator was pressed: 1 is the lobby, 2–11 the floors upstairs.
+    func ride(to floor: Int) {
+        elevatorOpen = false
+        engine.running = phase == .sneaking
+        guard floor != currentFloor else { return }
+        Sound.powerup.play(volume: 0.5)
+        if floor == 1 {
+            go(to: .lobby)
+        } else {
+            currentFloor = floor
+            go(to: .upstairs)
+        }
+    }
+
+    func closeElevator() {
+        elevatorOpen = false
+        engine.running = phase == .sneaking
     }
 
     private func toggleHiding(in spot: Thing) {
@@ -396,7 +496,7 @@ final class StreetModel {
         case .street:
             walk(dt)
             tickRats(dt)
-        case .lobby: walk(dt)
+        case .lobby, .upstairs: walk(dt)
         case .kitchen: tickMom(dt)
         case .office: break
         }
@@ -431,7 +531,10 @@ final class StreetModel {
                 let reach: CGFloat = engine.ducking ? 110 : 290
                 let ahead = dx * (w.facingRight ? 1 : -1)
                 guard ahead > 0, ahead < reach, abs(dy) < 85, !engine.concealed, engine.z < 60 else { continue }
+                // Being spotted can send you to another floor (and swap who's walking about): stop here if it did.
+                let before = area
                 spotted(by: w.kind)
+                if area != before { return }
             default: break
             }
         }
@@ -442,7 +545,18 @@ final class StreetModel {
         Sound.buzz.play()
         banner = kind == .guardian ? "Guard: \"Hey! No kids out here at night!\"" : "Worker: \"Lost, little one? Out you go!\""
         bannerTime = 2.6
-        engine.player = kind == .guardian ? CGPoint(x: 4150, y: 620) : CGPoint(x: 200, y: 620)
+        if kind == .guardian {
+            engine.player = CGPoint(x: 4150, y: 620)
+        } else if area == .upstairs {
+            // Upstairs, the worker sends you back down to the lobby.
+            hidingIn = nil
+            engine.hidden = false
+            go(to: .lobby)
+            engine.player = CGPoint(x: 200, y: 620)
+            return
+        } else {
+            engine.player = CGPoint(x: 200, y: 620)
+        }
         engine.hidden = false
         hidingIn = nil
     }
@@ -618,7 +732,15 @@ final class StreetModel {
             engine.say(snacks > 0 ? "I've got snacks. Back out the door while Mom's back is turned!"
                                   : "The fridge is on the far side. Go when Mom is cooking, and crouch under a table when she walks.")
         case .lobby:
-            engine.say(doorOpen ? "Uncle's door is open. Go in!" : "Hide behind the plants when a worker looks my way. Uncle's door is at the far end.")
+            engine.say(Settings.shared.practice ? "Take the elevator to floor \(uncleFloor). Uncle is in room \(uncleRoom)."
+                                                : "Hide behind the plants when a worker looks my way. The elevator is at the far end.")
+        case .upstairs:
+            // No hints about Uncle's room... except from the Guide in practice mode.
+            if Settings.shared.practice {
+                engine.say(currentFloor == uncleFloor ? "The Guide says: this is the floor! Room \(uncleRoom)." : "The Guide says: wrong floor. Uncle is on floor \(uncleFloor).")
+            } else {
+                engine.say("Uncle's room could be on any floor. I'll have to knock on doors... quietly.")
+            }
         case .office: engine.say("Talk to Uncle!")
         case .street:
             if fed == Self.dogCount {
@@ -644,19 +766,23 @@ struct StreetLevelView: View {
         switch model.area {
         case .street: "Level 5 · The Street  ·  dogs \(model.fed)/\(StreetModel.dogCount)"
         case .kitchen: "Level 5 · Mom's Kitchen"
-        case .lobby: "Level 5 · Uncle's Hotel"
-        case .office: "Level 5 · Uncle's Office"
+        case .lobby: "Level 5 · Hotel Lobby (Floor 1)"
+        case .upstairs: "Level 5 · Hotel · Floor \(model.currentFloor)"
+        case .office: "Level 5 · Uncle's Room \(model.uncleRoom)"
         }
     }
 
     var body: some View {
         LevelScaffold(engine: model.engine, title: title, inventory: model.inventory,
                       popup: model.popup, banner: model.banner, belt: model.belt,
-                      chase: model.chase, guideTips: GuideTips.level5,
+                      chase: model.chase,
+                      guideTips: GuideTips.level5 + ["Uncle's room this time: room \(model.uncleRoom), on floor \(model.uncleFloor). Take the elevator!"],
                       onHome: onExit, onRestart: model.retry, onHint: model.hint) {
             world.allowsHitTesting(false)
         } extra: {
-            EmptyView()
+            if model.elevatorOpen {
+                ElevatorPanel(current: model.currentFloor, onPick: model.ride(to:), onClose: model.closeElevator)
+            }
         }
         .onAppear {
             model.onComplete = { game.complete(level: 5) }
@@ -684,6 +810,7 @@ struct StreetLevelView: View {
         case .street: StreetScene(width: StreetModel.streetWidth)
         case .kitchen: KitchenWall(width: StreetModel.kitchenWidth)
         case .lobby: LobbyWall(width: StreetModel.lobbyWidth)
+        case .upstairs: HotelCorridorWall(width: StreetModel.corridorWidth, floor: model.currentFloor)
         case .office: OfficeWall(width: StreetModel.officeWidth)
         }
     }
@@ -738,7 +865,9 @@ struct StreetLevelView: View {
         }
         case "streetDoor", "lobbyDoor", "lobbyBack": DoorView(color: Color(red: 0.35, green: 0.30, blue: 0.25)) { EmptyView() }
         case "hotelDoor": DoorView(color: Color(red: 0.65, green: 0.50, blue: 0.20)) { DoorSign(text: "HOTEL", color: .yellow) }
-        case "uncleDoor": DoorView(color: Color(red: 0.25, green: 0.40, blue: 0.75), open: model.doorOpen) { DoorSign(text: "UNCLE", color: .cyan) }
+        case "uncleDoor": DoorView(color: Color(red: 0.45, green: 0.22, blue: 0.20), open: model.doorOpen) { DoorSign(text: "\(model.uncleRoom)", color: Palette.gold) }
+        case "roomDoor": DoorView(color: Color(red: 0.45, green: 0.22, blue: 0.20)) { DoorSign(text: String(thing.id.dropFirst(4)), color: Palette.gold) }
+        case "elevator": ElevatorDoorView(floor: model.currentFloor)
         case "busStop": BusStopView(hiding: model.hidingIn == thing.id)
         case "plant": LobbyPlantView(hiding: model.hidingIn == thing.id)
         case "fridge": FridgeView()
@@ -762,6 +891,116 @@ struct StreetLevelView: View {
         case "chair": ChairView()
         case "box": CardboardBox(open: false)
         default: EmptyView()
+        }
+    }
+}
+
+/// The hotel elevator's doors, with the floor number lit up above them.
+struct ElevatorDoorView: View {
+    let floor: Int
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(floor == 1 ? "L" : "\(floor)")
+                .font(.game(22, .heavy))
+                .foregroundStyle(.orange)
+                .frame(width: 54, height: 34)
+                .background(.black, in: RoundedRectangle(cornerRadius: 6))
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(Color(white: 0.55)).frame(width: 150, height: 290)
+                HStack(spacing: 4) {
+                    LinearGradient(colors: [Color(white: 0.85), Color(white: 0.65)], startPoint: .leading, endPoint: .trailing)
+                    LinearGradient(colors: [Color(white: 0.65), Color(white: 0.85)], startPoint: .leading, endPoint: .trailing)
+                }
+                .frame(width: 134, height: 276)
+            }
+            .overlay(alignment: .trailing) {
+                VStack(spacing: 6) {
+                    Circle().fill(.orange).frame(width: 12)
+                    Circle().fill(Color(white: 0.3)).frame(width: 12)
+                }
+                .padding(6)
+                .background(Color(white: 0.4), in: Capsule())
+                .offset(x: 26)
+            }
+        }
+    }
+}
+
+/// An upstairs corridor in Uncle's hotel: wallpaper, a long carpet and the floor number.
+struct HotelCorridorWall: View {
+    let width: CGFloat
+    let floor: Int
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: [Color(red: 0.20, green: 0.24, blue: 0.36), Color(red: 0.30, green: 0.32, blue: 0.44)], startPoint: .top, endPoint: .bottom)
+                .frame(width: width, height: 545)
+            ForEach(0..<Int(width / 90), id: \.self) { i in
+                Rectangle().fill(.white.opacity(0.05)).frame(width: 30, height: 545).offset(x: CGFloat(i) * 90)
+            }
+            Rectangle().fill(Palette.gold.opacity(0.5)).frame(width: width, height: 6).offset(y: 440)
+            Rectangle().fill(Color(red: 0.16, green: 0.18, blue: 0.28)).frame(width: width, height: 100).offset(y: 446)
+            Rectangle().fill(Color(red: 0.45, green: 0.14, blue: 0.18)).frame(width: width, height: 155).offset(y: 545)
+            Rectangle().fill(Palette.gold.opacity(0.35)).frame(width: width, height: 5).offset(y: 600)
+            ForEach(0..<Int(width / 600) + 1, id: \.self) { i in
+                Text("FLOOR \(floor)")
+                    .font(.game(26, .heavy))
+                    .foregroundStyle(Palette.gold.opacity(0.8))
+                    .position(x: 340 + CGFloat(i) * 600, y: 150)
+            }
+            ForEach(0..<4, id: \.self) { i in
+                Image(systemName: "light.cylindrical.ceiling.fill").font(.system(size: 44)).foregroundStyle(Palette.gold)
+                    .position(x: 300 + CGFloat(i) * 480, y: 70)
+            }
+        }
+        .frame(width: width, height: 700, alignment: .topLeading)
+    }
+}
+
+/// The elevator's buttons: L for the lobby, then floors 2 to 11. No hints about which one is Uncle's.
+struct ElevatorPanel: View {
+    let current: Int
+    let onPick: (Int) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.55).ignoresSafeArea().onTapGesture(perform: onClose)
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "arrow.up.arrow.down.square.fill").foregroundStyle(.orange)
+                    Text("Elevator")
+                    Spacer()
+                    RoundIconButton(symbol: "xmark", action: onClose).scaleEffect(0.75)
+                }
+                .font(.game(34, .heavy))
+                .foregroundStyle(.white)
+                Text("Which floor? You're on \(current == 1 ? "the lobby" : "floor \(current)").")
+                    .font(.game(18, .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(78), spacing: 14), count: 4), spacing: 14) {
+                    ForEach([1] + StreetModel.floors, id: \.self) { floor in
+                        Button {
+                            SoundPlayer.shared.tap()
+                            onPick(floor)
+                        } label: {
+                            Text(floor == 1 ? "L" : "\(floor)")
+                                .font(.game(30, .heavy))
+                                .foregroundStyle(floor == current ? .black : .white)
+                                .frame(width: 78, height: 78)
+                                .background(floor == current ? AnyShapeStyle(Color.orange) : AnyShapeStyle(Color(white: 0.3).gradient), in: Circle())
+                                .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 3))
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                }
+            }
+            .padding(28)
+            .frame(width: 440)
+            .background(LinearGradient(colors: [Color(white: 0.22), Color(white: 0.12)], startPoint: .top, endPoint: .bottom),
+                        in: RoundedRectangle(cornerRadius: 30))
+            .overlay(RoundedRectangle(cornerRadius: 30).stroke(.orange.opacity(0.7), lineWidth: 4))
         }
     }
 }

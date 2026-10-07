@@ -143,6 +143,8 @@ final class DownstairsModel {
         }
         chase.onCaught = { [weak self] who, message in self?.caught(who, message) }
         chase.onGaveUp = { [weak self] who in self?.gaveUp(who) }
+        // Practice mode: the Guide leads you to the next place to go.
+        engine.guideGoal = { [weak self] in self?.guideGoal() }
         reset()
     }
 
@@ -1238,6 +1240,73 @@ final class DownstairsModel {
     }
 
     func hint() { engine.say(tip, seconds: 4.5) }
+
+    // MARK: The Guide (practice mode)
+
+    /// The doors between rooms: from, to, and the door you use.
+    private static let links: [(Room, Room, String)] = [
+        (.hallway, .stairs, "toStairs"), (.stairs, .hallway, "toHallway"),
+        (.stairs, .downstairs, "toDownstairs"), (.downstairs, .stairs, "toStairs"),
+        (.downstairs, .garage, "toGarage"), (.garage, .downstairs, "toHouse"),
+        (.downstairs, .basement, "toBasement"), (.basement, .downstairs, "toHouseUp"),
+        (.hallway, .brotherRoom, "siblingDoor"), (.brotherRoom, .hallway, "hallDoor"),
+        (.hallway, .momRoom, "momDoor"), (.momRoom, .hallway, "hallDoor"),
+        (.basement, .yard, "exitDoor"), (.roof, .hallway, "roofWindow"),
+    ]
+
+    /// The room the next step happens in, and the thing to go to there (nil: just get to the room).
+    private var guideTarget: (room: Room, id: String?) {
+        if !checkpoints.contains("downstairs") { return (.downstairs, nil) }
+        if !hasDogKey {
+            if dogWaiting { return (.downstairs, hasFood ? "frontDoor" : "fridge") }
+            return (.downstairs, hasFood ? "dWindow" : "fridge")
+        }
+        if doorKeys < 3 {
+            if smallKeys > 0 { return firstClosed(Self.lockboxSpots) }
+            if scraps > 0 { return (.garage, "workbench") }
+            return firstClosed(Array(scrapSpots))
+        }
+        if !hasPhoneCode {
+            if dad == .upstairs { return (.garage, "switch") }
+            if dad == .comingDown || dad == .walkingToGarage { return (.downstairs, "closetA") }
+            if mom == .asleep { return hasToy ? (.hallway, nil) : (.brotherRoom, "toyChest") }
+            return (.momRoom, "momNightstand")
+        }
+        if room != .yard && !exitOpen { return (.basement, "exitDoor") }
+        return (.yard, doorLocked ? "gate" : "yardDoor")
+    }
+
+    /// The first of these things that hasn't been opened yet, in whichever room it's in.
+    private func firstClosed(_ ids: [String]) -> (room: Room, id: String?) {
+        for place in [Room.downstairs, .garage, .basement] {
+            let things = place == room ? engine.things : saved[place] ?? []
+            if let thing = things.first(where: { ids.contains($0.id) && !$0.open && !$0.hidden }) { return (place, thing.id) }
+        }
+        return (.downstairs, nil)
+    }
+
+    private func guideGoal() -> CGPoint? {
+        let target = guideTarget
+        if target.room == room { return target.id.flatMap { engine.spot($0) } }
+        // Find the way there, room by room, and lead to the first door.
+        var seen: Set<Room> = [room]
+        var queue: [(room: Room, door: String)] = []
+        for link in Self.links where link.0 == room {
+            seen.insert(link.1)
+            queue.append((link.1, link.2))
+        }
+        var i = 0
+        while i < queue.count {
+            let step = queue[i]
+            i += 1
+            if step.room == target.room { return engine.spot(step.door) }
+            for link in Self.links where link.0 == step.room && !seen.contains(link.1) {
+                seen.insert(link.1)
+                queue.append((link.1, step.door))
+            }
+        }
+        return nil
+    }
 }
 
 // MARK: - View

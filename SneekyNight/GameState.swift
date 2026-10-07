@@ -144,8 +144,13 @@ enum SideReward {
 
 enum Boost: String, CaseIterable, Identifiable {
     case coolCap, leaf, lightningBall, windCrown, goldenCrown, arrow, cloud
+    /// The Guide's own hat. It never turns up in the game: it's only given to devices listed in `GuidesHat.devices`.
+    case guidesHat
 
     var id: String { rawValue }
+
+    /// Every boost you can actually find (boxes, rats, the roof, the secret room). The Guide's Hat isn't one.
+    static let findable: [Boost] = allCases.filter { $0 != .guidesHat }
     var name: String {
         switch self {
         case .coolCap: "Cool Cap with a Can"
@@ -155,6 +160,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .goldenCrown: "Golden Crown"
         case .arrow: "Arrow"
         case .cloud: "Cloud"
+        case .guidesHat: "The Guide's Hat"
         }
     }
     var about: String {
@@ -166,6 +172,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .goldenCrown: "Everything ×1.2, and you're quieter"
         case .arrow: "Dash ×1.9 and walking speed ×1.2"
         case .cloud: "Press X: fly for 10 seconds, over obstacles and hedges. 30 second cooldown."
+        case .guidesHat: "Press H: switch it on or off. While it's on, everything is ×10.5 and you walk through things."
         }
     }
     var symbol: String {
@@ -177,6 +184,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .goldenCrown: "crown.fill"
         case .arrow: "arrow.right"
         case .cloud: "cloud.fill"
+        case .guidesHat: "hat.widebrim.fill"
         }
     }
     var color: Color {
@@ -188,11 +196,28 @@ enum Boost: String, CaseIterable, Identifiable {
         case .goldenCrown: Palette.gold
         case .arrow: .orange
         case .cloud: Color(red: 0.8, green: 0.92, blue: 1)
+        case .guidesHat: GuidesHat.color
         }
     }
 
     /// The ones that make you faster (for "the world revolving").
     static let speedBoosts: Set<Boost> = [.coolCap, .windCrown, .goldenCrown, .arrow]
+}
+
+/// The Guide's Hat can't be found, bought or won: the chance is exactly 0. A device only gets it
+/// when its ID is added to `devices` below (ask for it to be given to a specific device).
+/// The device ID is shown at the bottom of the Settings screen.
+enum GuidesHat {
+    /// Device IDs (Settings → Device ID) that own the hat. Empty: nobody has it.
+    static let devices: Set<String> = []
+
+    /// Everything is multiplied by this while the hat is switched on.
+    static let power = 10.5
+    static let color = Color(red: 0.45, green: 0.25, blue: 0.75)
+
+    /// This device's ID (the same for every save file on it).
+    static var deviceID: String { UIDevice.current.identifierForVendor?.uuidString ?? "unknown" }
+    static var grantedHere: Bool { devices.contains(deviceID) }
 }
 
 /// Things the dungeon's orb shop can upgrade. Each has 10 steps.
@@ -509,6 +534,13 @@ final class GameState {
         }
         if earned.contains(.fly) || earned.contains(.owl) { earned.insert(.fly) }
         badges = earned
+        // The Guide's Hat only exists on devices it was given to.
+        if GuidesHat.grantedHere {
+            boosts.insert(.guidesHat)
+        } else {
+            boosts.remove(.guidesHat)
+            self.look.boosts.remove(.guidesHat)
+        }
     }
 
     func award(_ badge: Badge) {
@@ -566,7 +598,7 @@ final class GameState {
     /// 1 time in 15 a boost you don't have, otherwise 1 time in 5 a new accessory.
     func rollLoot(boostOdds: Int = 15) -> Loot? {
         if !hasBat && Int.random(in: 0..<12) == 0 { return .bat }
-        if Int.random(in: 0..<boostOdds) == 0, let boost = Boost.allCases.filter({ !boosts.contains($0) }).randomElement() {
+        if Int.random(in: 0..<boostOdds) == 0, let boost = Boost.findable.filter({ !boosts.contains($0) }).randomElement() {
             return .boost(boost)
         }
         if Int.random(in: 0..<5) == 0, let item = Accessory.all.filter({ !accessories.contains($0) }).randomElement() {
@@ -577,7 +609,7 @@ final class GameState {
 
     /// A random boost you don't own yet (the roof hands these out), or nil when you have them all.
     func newBoost() -> Boost? {
-        Boost.allCases.filter { !boosts.contains($0) }.randomElement()
+        Boost.findable.filter { !boosts.contains($0) }.randomElement()
     }
 
     func take(_ loot: Loot) {
@@ -600,7 +632,7 @@ final class GameState {
 
     /// "Im unstoppable!": every boost, plus the vines, the toy and the bat.
     func checkUnstoppable() {
-        if boosts.count == Boost.allCases.count && hasVines && hasToy && hasBat { award(.unstoppable) }
+        if boosts.isSuperset(of: Boost.findable) && hasVines && hasToy && hasBat { award(.unstoppable) }
     }
 
     /// Side Level 1 opens with 3 accessories, 20 badges and Level 3 won.
@@ -616,7 +648,7 @@ final class GameState {
     func claimSideReward() -> SideReward {
         completedSide.insert(1)
         var choices: [SideReward] = []
-        if let boost = Boost.allCases.filter({ !boosts.contains($0) }).randomElement() { choices.append(.boost(boost)) }
+        if let boost = Boost.findable.filter({ !boosts.contains($0) }).randomElement() { choices.append(.boost(boost)) }
         if !extraColors { choices.append(.colors) }
         let prize = choices.randomElement() ?? .nothing
         switch prize {

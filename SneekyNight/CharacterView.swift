@@ -73,14 +73,20 @@ struct CharacterView: View {
         let frontArm = taunting ? -160 - wiggle * 20 : crouching ? -72 - swing * 16 : swing * 30
         // Crouching is its own pose: knees bent, the upper body lowered and leaning forward,
         // rising and sinking a little with each breath and each careful step.
-        let drop: CGFloat = crouching ? 30 + breath * 1.6 - abs(swing) * 3 : 0
+        // The slippers stay on the floor line (y 150, same as standing), so the feet never sink
+        // into the floor, and the body sits just on top of the bent knees.
+        let drop: CGFloat = crouching ? 24 + breath * 1.2 - abs(swing) * 2 : 0
         return ZStack {
             if crouching {
-                bentLeg(shuffle: -swing * 7).position(x: 42, y: 139 - max(0, swing) * 3)
-                bentLeg(shuffle: swing * 7).position(x: 56, y: 140 - max(0, -swing) * 3)
+                bentLeg(shuffle: -swing * 6).position(x: 42, y: 131 - max(0, swing) * 3)
+                    .transition(.identity)
+                bentLeg(shuffle: swing * 6).position(x: 56, y: 131 - max(0, -swing) * 3)
+                    .transition(.identity)
             } else {
                 leg(swing * 28).position(x: 42, y: 126)
+                    .transition(.identity)
                 leg(-swing * 28).position(x: 58, y: 126)
+                    .transition(.identity)
             }
             upperBody(backArm: backArm, frontArm: frontArm, swing: swing, glance: crouching ? breath * 2.2 : 0)
                 .rotationEffect(.degrees(crouching ? 9 + swing * 2 : 0), anchor: .bottom)
@@ -260,6 +266,15 @@ extension CharacterView {
             }
             .shadow(color: Color(red: 0.6, green: 0.8, blue: 1), radius: 4)
             .position(x: 92, y: 14)
+        }
+        if look.shownBoosts.contains(.guidesHat) {
+            // The Guide's own purple top hat, with a little lantern-light glow.
+            Rectangle().fill(GuidesHat.color).frame(width: 40, height: 30).position(x: 50, y: -2)
+            Capsule().fill(GuidesHat.color).brightness(-0.1).frame(width: 66, height: 8).position(x: 50, y: 14)
+            Rectangle().fill(Palette.gold).frame(width: 40, height: 5).position(x: 50, y: 8)
+            Image(systemName: "sparkle").font(.system(size: 12, weight: .bold)).foregroundStyle(.yellow)
+                .shadow(color: .yellow, radius: 5)
+                .position(x: 60, y: -6)
         }
         if look.shownBoosts.contains(.lightningBall) {
             Image(systemName: "bolt.circle.fill").font(.system(size: 22)).foregroundStyle(.yellow)

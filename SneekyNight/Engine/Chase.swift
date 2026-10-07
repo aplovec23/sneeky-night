@@ -80,6 +80,8 @@ final class Chase {
     @ObservationIgnored private var wander: CGPoint?
     @ObservationIgnored private var brotherUsed = false
     @ObservationIgnored private var laughed = false
+    /// How many times they've tried to grab you while you're untouchable (creative mode).
+    @ObservationIgnored private var touchedGhost = 0
 
     static let giveUpAfter = 60.0
 
@@ -377,6 +379,20 @@ final class Chase {
             if Settings.shared.practice {
                 say("Just practice... carry on.", for: 3)
                 engine?.say("Practice mode: I would have been caught right here!", seconds: 2.5)
+            } else {
+                // The untouchable buff: their hands go straight through you, and it's very confusing.
+                stunned = 3
+                touchedGhost += 1
+                let ghostly = touchedGhost >= 3 || Int.random(in: 0..<3) == 0
+                let confused = who == .mom
+                    ? ["Why can't I touch you?!", "What?! My hands went right through you!", "Hold still! Why can't I grab you?!",
+                       "This is impossible... I'm still dreaming, aren't I?"]
+                    : ["Huh? Why can't I grab you, kiddo?!", "My hands... went right through you?!", "I need more coffee. Or less."]
+                let ghostLines = who == .mom
+                    ? ["Are you... a GHOST?!", "AAAH! A ghost! A ghost in my house!", "You're not my child, you're a GHOST!"]
+                    : ["Honey! HONEY! There's a ghost in the house!", "Wait... are you a ghost?!"]
+                say((ghostly ? ghostLines : confused).randomElement()!, for: 3)
+                engine?.say(["Hee hee. Untouchable!", "Boo!", "Can't touch this!"].randomElement()!, seconds: 2)
             }
             return
         }

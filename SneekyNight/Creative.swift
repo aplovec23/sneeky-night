@@ -16,10 +16,13 @@ struct AdminCommand: Identifiable {
     let run: @MainActor (AdminContext) -> Void
 }
 
-/// Creative mode's 45 commands. They change the level you're in, your status, the sky and the music.
+/// Creative mode's 55 commands. They change the level you're in, your status, the sky and the music.
+/// Status commands stack: press "Speed ×2" three times for ×8.
 @MainActor
 enum Admin {
     static let groups = ["You", "Clock", "Noise", "Grown-ups", "Level", "Sky", "Music & fun"]
+    /// Stacking stops here, so nothing breaks.
+    static let most: CGFloat = 1000
 
     static let commands: [AdminCommand] = {
         var list: [(String, String, String, @MainActor (AdminContext) -> Void)] = []
@@ -27,11 +30,11 @@ enum Admin {
             list.append((group, name, symbol, run))
         }
         // You (15)
-        add("You", "Speed ×2", "hare.fill") { $0.engine.speedBonus += 1 }
-        add("You", "Normal speed", "tortoise.fill") { $0.engine.speedBonus = 0 }
-        add("You", "Super jump", "arrow.up.to.line") { $0.engine.jumpBoost = true; $0.engine.jumpMult = 3 }
+        add("You", "Speed ×2", "hare.fill") { $0.engine.speedMult = min($0.engine.speedMult * 2, Admin.most) }
+        add("You", "Normal speed", "tortoise.fill") { $0.engine.speedBonus = 0; $0.engine.speedMult = 1 }
+        add("You", "Super jump ×3", "arrow.up.to.line") { $0.engine.jumpMult = min($0.engine.jumpMult * 3, Admin.most) }
         add("You", "Normal jump", "arrow.up") { $0.engine.jumpBoost = false; $0.engine.jumpMult = 1 }
-        add("You", "Super dash", "wind") { $0.engine.canDash = true; $0.engine.dashMult = 4 }
+        add("You", "Super dash ×4", "wind") { $0.engine.canDash = true; $0.engine.dashMult = min($0.engine.dashMult * 4, Double(Admin.most)) }
         add("You", "Learn Dash", "figure.run") { $0.engine.canDash = true }
         add("You", "Learn Run", "figure.run.circle.fill") { $0.engine.canRun = true }
         add("You", "Fly for 30 s", "cloud.fill") { $0.engine.fly(30) }
@@ -39,8 +42,8 @@ enum Admin {
         add("You", "Ghost (can't be caught)", "eye.slash.fill") { $0.engine.ghost.toggle() }
         add("You", "Can't be hurt", "shield.fill") { $0.engine.godMode.toggle() }
         add("You", "Heal", "heart.fill") { $0.engine.hp = $0.engine.maxHP }
-        add("You", "Giant", "arrow.up.left.and.arrow.down.right") { $0.engine.sizeScale = 1.6 }
-        add("You", "Tiny", "arrow.down.right.and.arrow.up.left") { $0.engine.sizeScale = 0.6 }
+        add("You", "Giant", "arrow.up.left.and.arrow.down.right") { $0.engine.sizeScale = min($0.engine.sizeScale * 1.6, 4) }
+        add("You", "Tiny", "arrow.down.right.and.arrow.up.left") { $0.engine.sizeScale = max($0.engine.sizeScale * 0.6, 0.2) }
         add("You", "Normal size", "person.fill") { $0.engine.sizeScale = 1 }
         // Clock (7)
         add("Clock", "+60 seconds", "plus.circle.fill") { $0.engine.timeLeft += 60 }
@@ -101,6 +104,45 @@ enum Admin {
         add("Music & fun", "Fast music", "hare") { _ in SoundPlayer.shared.setMusic(rate: 1.5) }
         add("Music & fun", "Slow music", "tortoise.circle") { _ in SoundPlayer.shared.setMusic(rate: 0.7) }
         add("Music & fun", "Confetti!", "party.popper.fill") { $0.confetti() }
+        // New in the Sneeky Nights update (10)
+        add("You", "Jump ×2", "arrow.up.circle.fill") { $0.engine.jumpMult = min($0.engine.jumpMult * 2, Admin.most) }
+        add("You", "Dash ×2", "wind.circle.fill") { $0.engine.canDash = true; $0.engine.dashMult = min($0.engine.dashMult * 2, Double(Admin.most)) }
+        add("You", "Quiet ×2", "speaker.zzz.fill") { $0.engine.noiseDiv = min($0.engine.noiseDiv * 2, Double(Admin.most)) }
+        add("You", "Everything ×2", "bolt.circle.fill") { c in
+            let e = c.engine
+            e.speedMult = min(e.speedMult * 2, Admin.most)
+            e.jumpMult = min(e.jumpMult * 2, Admin.most)
+            e.dashMult = min(e.dashMult * 2, Double(Admin.most))
+            e.noiseDiv = min(e.noiseDiv * 2, Double(Admin.most))
+        }
+        add("You", "Double health", "heart.circle.fill") { c in
+            c.engine.usesHP = true
+            c.engine.maxHP = min(c.engine.maxHP * 2, 1_000_000)
+            c.engine.hp = c.engine.maxHP
+        }
+        add("You", "Reset every stat", "arrow.uturn.backward.circle.fill") { c in
+            let e = c.engine
+            e.speedBonus = 0; e.speedMult = 1; e.jumpMult = 1; e.jumpBoost = false
+            e.dashMult = 1; e.noiseDiv = 1; e.sizeScale = 1
+        }
+        add("Clock", "+5 minutes", "clock.badge.checkmark.fill") { $0.engine.timeLeft += 300 }
+        add("Grown-ups", "Stun for 5 minutes", "moon.zzz.fill") { _ = $0.chase?.stun(300, momOnly: false) }
+        add("Level", "Drop a lamp", "lamp.floor.fill") { c in
+            let e = c.engine
+            e.ignoreHazards(for: 1)
+            e.things.append(Thing(id: "admin-lamp\(e.things.count)", kind: "lamp",
+                                  pos: CGPoint(x: e.player.x + (e.facingRight ? 110 : -110), y: e.player.y),
+                                  footprint: CGSize(width: 40, height: 26), hazard: .lamp))
+        }
+        add("Music & fun", "Confetti storm", "sparkles.rectangle.stack.fill") { c in
+            c.confetti()
+            Task { @MainActor in
+                for _ in 0..<4 {
+                    try? await Task.sleep(for: .seconds(0.5))
+                    c.confetti()
+                }
+            }
+        }
         return list.enumerated().map { AdminCommand(id: $0.offset + 1, group: $0.element.0, name: $0.element.1, symbol: $0.element.2, run: $0.element.3) }
     }()
 }
@@ -110,6 +152,32 @@ struct AdminPanel: View {
     let context: AdminContext
     let onClose: () -> Void
     @State private var last = ""
+    /// Redrawn after every command, so the status line shows the new stacked values.
+    @State private var presses = 0
+
+    /// Your stacked status right now.
+    private var status: some View {
+        let e = context.engine
+        let speed = (1 + e.speedBonus) * e.speedMult
+        return HStack(spacing: 10) {
+            stat("hare.fill", Double(speed))
+            stat("arrow.up", Double(e.jumpMult))
+            stat("wind", e.dashMult)
+            stat("speaker.slash.fill", e.noiseDiv)
+            if e.usesHP {
+                Label("\(Int(e.hp))", systemImage: "heart.fill")
+            }
+            if e.godMode { Image(systemName: "shield.fill").foregroundStyle(.green) }
+            if e.ghost { Image(systemName: "eye.slash.fill").foregroundStyle(.cyan) }
+        }
+        .font(.game(14, .heavy))
+        .foregroundStyle(.white.opacity(0.85))
+        .id(presses)
+    }
+
+    private func stat(_ symbol: String, _ value: Double) -> some View {
+        Label(value >= 100 ? "×\(Int(value))" : String(format: "×%.1f", value), systemImage: symbol)
+    }
 
     var body: some View {
         ZStack {
@@ -124,6 +192,7 @@ struct AdminPanel: View {
                         .font(.game(16, .semibold))
                         .foregroundStyle(.white.opacity(0.6))
                     Spacer()
+                    status
                     if !last.isEmpty {
                         Text("✓ \(last)")
                             .font(.game(16, .heavy))
@@ -143,6 +212,7 @@ struct AdminPanel: View {
                                         SoundPlayer.shared.tap()
                                         command.run(context)
                                         last = command.name
+                                        presses += 1
                                     } label: {
                                         HStack(spacing: 8) {
                                             Text("\(command.id)")

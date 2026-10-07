@@ -27,9 +27,10 @@ struct CustomLevel: Codable, Identifiable, Equatable {
         CustomItem(kind: "start", x: 200, y: 620),
         CustomItem(kind: "exit", x: 1850, y: 545),
     ]
+    /// Creative mode (admin panel, crown, immortality) while playing this level. Optional so older saved levels still load.
+    var creative: Bool?
 
-    static let maxObjects = 100
-    static let maxHazards = 20
+    /// There's no limit any more: place as many objects and hazards as you like, and make the level as long as you like.
     static let themes = ["Hallway", "Dungeon", "Hotel", "Street"]
 
     var hazardCount: Int { items.filter { CustomKind.find($0.kind).group == .hazard }.count }
@@ -70,7 +71,19 @@ struct CustomKind: Identifiable {
         CustomKind(id: "mom", name: "Mom", symbol: "figure.dress.line.vertical.figure", group: .character, onWall: true, single: true),
         CustomKind(id: "dad", name: "Dad", symbol: "mustache.fill", group: .character, onWall: false, single: true),
         CustomKind(id: "brother", name: "Brother", symbol: "figure.child", group: .character, onWall: false, single: true),
+        // Only in the Level Maker: you'll never meet these in the story levels.
+        CustomKind(id: "uncle", name: "Uncle", symbol: "car.fill", group: .character, onWall: false),
+        CustomKind(id: "friend", name: "Friend", symbol: "figure.2.arms.open", group: .character, onWall: false),
+        CustomKind(id: "ghost", name: "Ghost", symbol: "theatermasks.fill", group: .character, onWall: false),
+        CustomKind(id: "guide", name: "The Guide", symbol: "lightbulb.fill", group: .character, onWall: false),
+        CustomKind(id: "guard", name: "Guard", symbol: "flashlight.on.fill", group: .character, onWall: false),
+        CustomKind(id: "worker", name: "Worker", symbol: "bell.fill", group: .character, onWall: false),
     ]
+
+    /// Characters you talk to (E next to them) to hear their line.
+    static let talkers: Set<String> = ["brother", "uncle", "friend", "ghost", "guide"]
+    /// Characters who walk up and down and send you back to the start if they see you.
+    static let watchers: Set<String> = ["guard", "worker"]
 
     static func find(_ id: String) -> CustomKind { all.first { $0.id == id } ?? all[3] }
 
@@ -78,6 +91,12 @@ struct CustomKind: Identifiable {
         switch id {
         case "mom": "Who is making that noise?!"
         case "dad": "Hey! Back to bed, kiddo!"
+        case "uncle": "Need a ride, kiddo? Find the keys first!"
+        case "friend": "You're sneaking out too? Cool! Race you to the exit!"
+        case "ghost": "Boooo... just kidding. I'm friendly! The keys are that way."
+        case "guide": "Follow your nose... and check every box."
+        case "guard": "Hey! No kids allowed here!"
+        case "worker": "Lost, little one? Back to the start you go!"
         default: "Good luck! I won't tell."
         }
     }
@@ -145,7 +164,40 @@ struct CustomItemArt: View {
         case "mom": MomView(stunned: false, walking: false)
         case "dad": DadView(stunned: false, walking: false, laughing: false)
         case "brother": CharacterView(look: SiblingBuddy.look, facingRight: false).scaleEffect(0.78, anchor: .bottom)
+        case "uncle": PersonView(outfit: .uncle).scaleEffect(x: -1, y: 1)
+        case "friend": CharacterView(look: CustomItemArt.friendLook, facingRight: false)
+        case "ghost": GhostView()
+        case "guide": GuideView()
+        case "guard": PersonView(outfit: .guardian)
+        case "worker": PersonView(outfit: .worker(0))
         default: EmptyView()
+        }
+    }
+}
+
+extension CustomItemArt {
+    static let friendLook = Look(gender: .girl, skin: 4, shirt: 3, pattern: 4, cap: 0)
+}
+
+/// A friendly ghost (Level Maker only): a see-through kid in a sheet, bobbing up and down.
+struct GhostView: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { ctx in
+            let bob = sin(ctx.date.timeIntervalSinceReferenceDate * 2.2) * 6
+            ZStack {
+                UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 40)
+                    .fill(.white.opacity(0.85))
+                    .frame(width: 80, height: 118)
+                HStack(spacing: 14) {
+                    Ellipse().fill(Color(white: 0.15)).frame(width: 12, height: 18)
+                    Ellipse().fill(Color(white: 0.15)).frame(width: 12, height: 18)
+                }
+                .offset(y: -22)
+                Ellipse().fill(Color(white: 0.2)).frame(width: 14, height: 10).offset(y: 4)
+            }
+            .shadow(color: .white.opacity(0.7), radius: 12)
+            .offset(y: -24 + bob)
+            .frame(width: 100, height: 160, alignment: .bottom)
         }
     }
 }
@@ -188,7 +240,7 @@ struct LevelMakerListView: View {
                     }
                     Text("Level Maker").font(.game(52, .heavy)).foregroundStyle(.white)
                 }
-                Text("Build your own levels: up to \(CustomLevel.maxObjects) objects and \(CustomLevel.maxHazards) hazards. Add Mom, Dad and your brother, and write what they say.")
+                Text("Build your own levels with no limits: as many objects and hazards as you like, as long as you like. Add Mom, Dad, your brother and Level Maker characters, and write what they say.")
                     .font(.game(19, .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                     .multilineTextAlignment(.center)
@@ -301,11 +353,11 @@ struct LevelEditorView: View {
                 .frame(width: 230)
                 .background(.white, in: RoundedRectangle(cornerRadius: 12))
             stepper("Length", "\(Int(level.width))") { change in
-                level.width = min(4000, max(1000, level.width + Double(change) * 500))
+                level.width = max(1000, level.width + Double(change) * 500)
                 for i in level.items.indices { level.items[i].x = min(level.items[i].x, level.width - 80) }
             }
             stepper("Time", "\(Int(level.seconds)) s") { change in
-                level.seconds = min(600, max(30, level.seconds + Double(change) * 30))
+                level.seconds = max(30, level.seconds + Double(change) * 30)
             }
             Button {
                 SoundPlayer.shared.tap()
@@ -317,10 +369,20 @@ struct LevelEditorView: View {
                     .background(.white.opacity(0.15), in: Capsule())
             }
             .buttonStyle(PressableStyle())
+            Button {
+                SoundPlayer.shared.tap()
+                level.creative = !(level.creative ?? false)
+            } label: {
+                Label(level.creative == true ? "Creative: on" : "Creative: off", systemImage: "wand.and.stars")
+                    .font(.game(17)).foregroundStyle(level.creative == true ? .black : .white)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(level.creative == true ? AnyShapeStyle(Palette.gold) : AnyShapeStyle(.white.opacity(0.15)), in: Capsule())
+            }
+            .buttonStyle(PressableStyle())
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
-                Text("Objects \(level.objectCount)/\(CustomLevel.maxObjects)")
-                Text("Hazards \(level.hazardCount)/\(CustomLevel.maxHazards)")
+                Text("Objects \(level.objectCount)")
+                Text("Hazards \(level.hazardCount)")
             }
             .font(.game(14, .heavy))
             .foregroundStyle(.white.opacity(0.85))
@@ -429,7 +491,8 @@ struct LevelEditorView: View {
 
     private func hit(_ at: CGPoint) -> CustomItem? {
         level.items.reversed().first { item in
-            let tall: Double = CustomKind.find(item.kind).onWall || ["mom", "dad", "stranger", "brother"].contains(item.kind) ? 260 : 90
+            let kind = CustomKind.find(item.kind)
+            let tall: Double = kind.onWall || kind.group == .character || item.kind == "stranger" ? 260 : 90
             return abs(item.x - at.x) < 60 && at.y < item.y + 16 && at.y > item.y - tall
         }
     }
@@ -446,16 +509,6 @@ struct LevelEditorView: View {
         if kind.single, let i = level.items.firstIndex(where: { $0.kind == tool }) {
             // There's only one of these: move it here.
             move(i, to: at)
-            return
-        }
-        if kind.group == .hazard && level.hazardCount >= CustomLevel.maxHazards {
-            note = "That's the most hazards a level can have (\(CustomLevel.maxHazards))."
-            Sound.buzz.play()
-            return
-        }
-        if kind.group == .object && level.objectCount >= CustomLevel.maxObjects {
-            note = "That's the most objects a level can have (\(CustomLevel.maxObjects))."
-            Sound.buzz.play()
             return
         }
         var item = CustomItem(kind: tool, x: 0, y: 0)
@@ -488,7 +541,7 @@ struct LevelEditorView: View {
                     .buttonStyle(PressableStyle())
                 }
             }
-            Text("Teal = objects   ·   Red = hazards   ·   Purple = Mom, Dad and your brother (tap them after placing to write what they say)")
+            Text("Teal = objects   ·   Red = hazards   ·   Purple = characters (tap them after placing to write what they say). Uncle, Friend, Ghost, the Guide, Guard and Worker are Level Maker only!")
                 .font(.game(13, .semibold))
                 .foregroundStyle(.white.opacity(0.6))
         }
@@ -563,7 +616,10 @@ final class CustomLevelModel {
     var dadX: CGFloat = 0
     var dadRight = true
     var dadHere = false
-    var brotherSaying: String?
+    /// Someone you talked to is saying their line: where they stand, and what they say.
+    var talkLine: (spot: CGPoint, text: String)?
+    /// Level Maker guards and workers walking their beat.
+    var watchers: [Walker] = []
     let chase = Chase()
     let belt = ItemBelt()
 
@@ -571,7 +627,13 @@ final class CustomLevelModel {
     @ObservationIgnored var onEdit: () -> Void = {}
     @ObservationIgnored private var keyBoxes: Set<String> = []
     @ObservationIgnored private var dadHome: CGPoint = .zero
-    @ObservationIgnored private var brotherTime = 0.0
+    @ObservationIgnored private var talkTime = 0.0
+    @ObservationIgnored private var bannerTime = 0.0
+    /// The character you're standing next to (E talks to them).
+    @ObservationIgnored private var nearTalker: CustomItem?
+    /// What each guard or worker says when they see you, by walker id.
+    @ObservationIgnored private var watcherLines: [Int: String] = [:]
+    @ObservationIgnored private var start = CGPoint(x: 200, y: 620)
 
     static let floor: ClosedRange<CGFloat> = 545...690
 
@@ -582,6 +644,12 @@ final class CustomLevelModel {
     }
     var mom: CustomItem? { item("mom") }
     var brother: CustomItem? { item("brother") }
+    /// Everyone you can talk to: your brother and the Level Maker characters.
+    var talkers: [CustomItem] { level.items.filter { CustomKind.talkers.contains($0.kind) } }
+    private func line(of item: CustomItem) -> String {
+        let text = item.text.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? CustomKind.defaultLine(item.kind) : text
+    }
 
     init(level: CustomLevel) {
         self.level = level
@@ -614,6 +682,12 @@ final class CustomLevelModel {
             engine.say("\(who == .mom ? "Mom" : "Dad") gave up. Phew!", seconds: 2.5)
         }
         chase.brotherPos = { [weak self] in self?.brother.map { CGPoint(x: $0.x, y: $0.y) } }
+        // Practice mode: the Guide leads you to the next key (or the box hiding it), then the exit.
+        engine.guideGoal = { [weak self] in
+            guard let self else { return nil }
+            if let key = engine.nearestSpot(where: { $0.kind == "key" || self.keyBoxes.contains($0.id) }) { return key }
+            return engine.nearestSpot { $0.kind == "exit" }
+        }
         reset()
     }
 
@@ -626,6 +700,8 @@ final class CustomLevelModel {
         var things: [Thing] = []
         keyBoxes = []
         strangers = []
+        watchers = []
+        watcherLines = [:]
         for (n, item) in level.items.enumerated() {
             let id = "\(item.kind)\(n)"
             let pos = CGPoint(x: item.x, y: item.y)
@@ -659,12 +735,17 @@ final class CustomLevelModel {
                 strangers.append(Walker(id: n, kind: item.kind == "spikes" ? .rat : .stranger, pos: pos,
                                         range: max(60, pos.x - 240)...min(level.width - 60, pos.x + 240),
                                         speed: item.kind == "spikes" ? 170 : 110, style: n))
+            case "guard", "worker":
+                watchers.append(Walker(id: n, kind: item.kind == "guard" ? .guardian : .worker, pos: pos,
+                                       range: max(60, pos.x - 300)...min(level.width - 60, pos.x + 300),
+                                       speed: item.kind == "guard" ? 115 : 100, style: n))
+                watcherLines[n] = line(of: item)
             default: break
             }
         }
-        let start = item("start").map { CGPoint(x: $0.x, y: $0.y) } ?? CGPoint(x: 200, y: 620)
+        start = item("start").map { CGPoint(x: $0.x, y: $0.y) } ?? CGPoint(x: 200, y: 620)
         engine.load(SceneLayout(width: level.width, floor: Self.floor, things: things, spawn: start))
-        engine.usesHP = !strangers.isEmpty
+        engine.usesHP = !strangers.isEmpty || watchers.contains { $0.kind == .guardian }
         engine.timeLeft = level.seconds
         engine.timerOn = true
         engine.resetNoise()
@@ -677,7 +758,9 @@ final class CustomLevelModel {
         hidingIn = nil
         doorOpen = false
         over = false
-        brotherSaying = nil
+        talkLine = nil
+        nearTalker = nil
+        bannerTime = 0
         if let dad = item("dad") {
             dadHome = CGPoint(x: dad.x, y: dad.y)
             dadX = dad.x
@@ -751,16 +834,21 @@ final class CustomLevelModel {
         belt.tick(dt)
         guard !over else { return }
         let player = engine.player
-        if brotherTime > 0 {
-            brotherTime -= dt
-            if brotherTime <= 0 { brotherSaying = nil }
+        if talkTime > 0 {
+            talkTime -= dt
+            if talkTime <= 0 { talkLine = nil }
         }
-        // Talking to your brother is the stand-anywhere action when you're next to him.
-        if let brother {
-            let near = abs(player.x - brother.x) < 90 && abs(player.y - brother.y) < 70
-            let prompt: String? = near ? "Talk to your brother" : nil
-            if engine.defaultPrompt != prompt { engine.defaultPrompt = prompt }
+        if bannerTime > 0 {
+            bannerTime -= dt
+            if bannerTime <= 0 { banner = nil }
         }
+        // Talking to someone is the stand-anywhere action when you're next to them.
+        let near = talkers.filter { abs(player.x - $0.x) < 90 && abs(player.y - $0.y) < 70 }
+            .min { abs(player.x - $0.x) < abs(player.x - $1.x) }
+        nearTalker = near
+        let prompt: String? = near.map { $0.kind == "brother" ? "Talk to your brother" : "Talk to \(CustomKind.find($0.kind).name)" }
+        if engine.defaultPrompt != prompt { engine.defaultPrompt = prompt }
+        walkWatchers(dt)
         for i in strangers.indices {
             strangers[i].pos.x += strangers[i].speed * CGFloat(dt)
             if strangers[i].pos.x >= strangers[i].range.upperBound || strangers[i].pos.x <= strangers[i].range.lowerBound {
@@ -788,9 +876,42 @@ final class CustomLevelModel {
     }
 
     func talkToBrother() {
+        guard let who = nearTalker else { return }
         Sound.squeak.play(volume: 0.3)
-        brotherSaying = line("brother")
-        brotherTime = 4
+        talkLine = (CGPoint(x: who.x, y: who.y), line(of: who))
+        talkTime = 4
+    }
+
+    /// Guards and workers walk up and down. If one sees you, you're sent back to the start (guards hurt, too).
+    private func walkWatchers(_ dt: Double) {
+        let player = engine.player
+        for i in watchers.indices {
+            if watchers[i].wait > 0 {
+                watchers[i].wait -= dt
+            } else {
+                watchers[i].pos.x += watchers[i].speed * CGFloat(dt)
+                let range = watchers[i].range
+                if watchers[i].pos.x >= range.upperBound || watchers[i].pos.x <= range.lowerBound {
+                    watchers[i].pos.x = min(max(watchers[i].pos.x, range.lowerBound), range.upperBound)
+                    watchers[i].speed = -watchers[i].speed
+                    watchers[i].wait = .random(in: 1...2)
+                }
+                watchers[i].facingRight = watchers[i].speed > 0
+            }
+            let w = watchers[i]
+            let dx = player.x - w.pos.x, dy = player.y - w.pos.y
+            let ahead = dx * (w.facingRight ? 1 : -1)
+            guard ahead > 0, ahead < (engine.ducking ? 110 : 290), abs(dy) < 85, !engine.concealed, engine.z < 60, !engine.safe else { continue }
+            if w.kind == .guardian { engine.damage(25) }
+            guard !over else { return }
+            Sound.buzz.play()
+            banner = "\(w.kind == .guardian ? "Guard" : "Worker"): \"\(watcherLines[w.id] ?? CustomKind.defaultLine(w.kind == .guardian ? "guard" : "worker"))\""
+            bannerTime = 2.6
+            engine.player = start
+            engine.hidden = false
+            hidingIn = nil
+            return
+        }
     }
 
     private func bumped(_ i: Int) {
@@ -879,7 +1000,7 @@ private struct CustomLevelStage: View {
     var body: some View {
         LevelScaffold(engine: model.engine, title: "\(model.level.name)  ·  keys \(model.inventory.count)/\(model.level.keyCount)",
                       inventory: model.inventory, popup: model.popup, banner: model.banner, belt: model.belt,
-                      chase: model.chase, onHome: onExit, onRestart: model.reset, onHint: model.hint) {
+                      chase: model.chase, creativeHere: model.level.creative == true, onHome: onExit, onRestart: model.reset, onHint: model.hint) {
             world.allowsHitTesting(false)
         } extra: {
             EmptyView()
@@ -905,11 +1026,16 @@ private struct CustomLevelStage: View {
                     .scaleEffect(x: model.dadRight ? 1 : -1, y: 1)
                     .anchored(at: CGPoint(x: model.dadX, y: model.level.items.first { $0.kind == "dad" }?.y ?? 610))
             }
-            if let brother = model.brother {
-                CustomItemArt(kind: "brother").anchored(at: CGPoint(x: brother.x, y: brother.y))
-                if let text = model.brotherSaying {
-                    SpeechBubble(text: text, tint: .green, small: true).position(x: brother.x, y: brother.y - 190)
-                }
+            ForEach(model.talkers) { who in
+                CustomItemArt(kind: who.kind).anchored(at: CGPoint(x: who.x, y: who.y))
+            }
+            ForEach(model.watchers) { walker in
+                PersonView(outfit: walker.kind == .guardian ? .guardian : .worker(walker.style), walking: walker.wait <= 0)
+                    .scaleEffect(x: walker.facingRight ? 1 : -1, y: 1)
+                    .anchored(at: walker.pos)
+            }
+            if let talk = model.talkLine {
+                SpeechBubble(text: talk.text, tint: .green, small: true).position(x: talk.spot.x, y: talk.spot.y - 200)
             }
             ForEach(model.strangers) { walker in
                 Group {

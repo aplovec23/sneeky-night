@@ -341,9 +341,10 @@ struct CustomizeView: View {
                                 }
                             }
                         }
-                        section("Boosts (very rare! They all stack. Tap the eye to hide one)  \(game.boosts.count)/\(Boost.allCases.count)") {
+                        section("Boosts (very rare! They all stack. Tap the eye to hide one)  \(game.boosts.intersection(Boost.findable).count)/\(Boost.findable.count)") {
                             VStack(alignment: .leading, spacing: 10) {
-                                ForEach(Boost.allCases) { boost in
+                                // The Guide's Hat only shows up on a device that was given it.
+                                ForEach(Boost.findable + (game.boosts.contains(.guidesHat) ? [Boost.guidesHat] : [])) { boost in
                                     boostRow(boost)
                                 }
                             }

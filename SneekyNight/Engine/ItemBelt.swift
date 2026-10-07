@@ -7,17 +7,19 @@ import Observation
 @Observable
 final class ItemBelt {
     enum Item: Int, CaseIterable {
-        case vines, lightning, toy, bat, cloud
+        case vines, lightning, toy, bat, cloud, hat
 
-        var key: String { ["V", "F", "G", "B", "X"][rawValue] }
-        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill"][rawValue] }
-        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1)][rawValue] }
+        var key: String { ["V", "F", "G", "B", "X", "H"][rawValue] }
+        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill"][rawValue] }
+        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color][rawValue] }
     }
 
     var owned: Set<Item> = []
     var cooldowns: [Item: Double] = [:]
     /// Seconds of lightning-ball power left.
     var lightningLeft = 0.0
+    /// The Guide's Hat is switched on (H): everything ×10.5 and you walk through things.
+    var hatOn = false
 
     /// Set by the level: stun whoever is around for this many seconds (second value: Mom only).
     /// Returns false when there's nobody to stun.
@@ -37,6 +39,8 @@ final class ItemBelt {
         if game.hasBat { owned.insert(.bat) }
         if boosts.contains(.lightningBall) { owned.insert(.lightning) }
         if boosts.contains(.cloud) { owned.insert(.cloud) }
+        if boosts.contains(.guidesHat) { owned.insert(.hat) }
+        hatOn = false
         upgrades = game.upgrades
         maxHP = game.maxHP
         engine.maxHP = maxHP
@@ -48,6 +52,7 @@ final class ItemBelt {
     func reset() {
         cooldowns = [:]
         lightningLeft = 0
+        hatOn = false
         engine?.maxHP = maxHP
         engine?.hp = maxHP
         engine?.hurt = false
@@ -102,6 +107,16 @@ final class ItemBelt {
             cooldowns[.cloud] = 10 + 30
             Sound.magic.play()
             engine.say("Up, up and away!", seconds: 1.5)
+        case .hat:
+            // No cooldown: the Guide's Hat switches on and off whenever you like.
+            hatOn.toggle()
+            let full = engine.hp >= engine.maxHP
+            let part = engine.hp / max(engine.maxHP, 1)
+            engine.maxHP = maxHP * (hatOn ? GuidesHat.power : 1)
+            engine.hp = full ? engine.maxHP : engine.maxHP * part
+            Sound.magic.play()
+            engine.say(hatOn ? "The Guide's Hat! I feel ×10.5 stronger!" : "Hat power off.", seconds: 1.5)
+            apply()
         case .lightning:
             guard engine.running else { return }
             lightningLeft = 25
@@ -126,6 +141,13 @@ final class ItemBelt {
         jump *= CGFloat(Stat.jump.value(at: upgrades[.jump] ?? 0))
         dash *= Stat.dash.value(at: upgrades[.dash] ?? 0)
         quiet *= Stat.quiet.value(at: upgrades[.quiet] ?? 0)
+        if hatOn {
+            speed *= CGFloat(GuidesHat.power)
+            jump *= CGFloat(GuidesHat.power)
+            dash *= GuidesHat.power
+            quiet *= GuidesHat.power
+        }
+        engine?.phasing = hatOn
         engine?.speedMult = speed
         engine?.jumpMult = jump
         engine?.dashMult = dash

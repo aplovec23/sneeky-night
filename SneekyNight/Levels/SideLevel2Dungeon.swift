@@ -39,6 +39,14 @@ final class DungeonModel {
         engine.onItemKey = { [weak self] i in
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
+        // Practice mode: the Guide leads you to a rock with orbs left, or to the shop.
+        engine.guideGoal = { [weak self] in
+            guard let self, let next = questParts.first(where: { !$0.met }) else { return nil }
+            if next.text.hasPrefix("Mine") {
+                return engine.nearestSpot { $0.kind == "rock" && (self.left[$0.id] ?? 0) > 0 }
+            }
+            return engine.spot("shop")
+        }
         reset()
     }
 

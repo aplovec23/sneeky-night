@@ -116,6 +116,8 @@ final class HallwayModel {
         }
         chase.onCaught = { [weak self] who, message in self?.caught(who, message) }
         chase.onGaveUp = { [weak self] who in self?.gaveUp(who) }
+        // Practice mode: the Guide leads you to the next place to go.
+        engine.guideGoal = { [weak self] in self?.guideGoal() }
         reset()
     }
 
@@ -802,6 +804,23 @@ final class HallwayModel {
     private func closePopup() {
         withAnimation { popup = nil }
         engine.running = phase == .sneaking || phase == .warning
+    }
+
+    /// Practice mode: where the Guide leads you next. In another room, he leads you to its door first.
+    private func guideGoal() -> CGPoint? {
+        let target: (room: Room, id: String)
+        if !has(Self.windowKey) {
+            target = (.hallway, "window")
+        } else if !has(Self.siblingKey) && !has(Self.spareKey) {
+            target = (.siblingRoom, "nightstand")
+        } else if !has(Self.paper) && !codeAccepted {
+            target = (.hallway, paperBox)
+        } else {
+            target = (.hallway, "exitDoor")
+        }
+        if room == target.room { return engine.spot(target.id) }
+        if room == .hallway { return engine.spot(target.room == .siblingRoom ? "siblingDoor" : "momDoor") }
+        return engine.spot("hallDoor")
     }
 
     func hint() {
