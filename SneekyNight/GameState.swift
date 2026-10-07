@@ -209,7 +209,9 @@ enum Boost: String, CaseIterable, Identifiable {
 /// The device ID is shown at the bottom of the Settings screen.
 enum GuidesHat {
     /// Device IDs (Settings → Device ID) that own the hat. Empty: nobody has it.
-    static let devices: Set<String> = []
+    static let devices: Set<String> = [
+        "26016453-DFAD-4642-AA44-45078B473DDC",   // the iPad Air ("iPad (8)"), given 2026-10-07
+    ]
 
     /// Everything is multiplied by this while the hat is switched on.
     static let power = 10.5
