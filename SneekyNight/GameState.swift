@@ -13,6 +13,8 @@ struct Look: Equatable {
     var pattern = 0
     /// 0 = no cap.
     var cap = 0
+    /// Hair style, from `LookOptions.hairStyles`. 0 is the classic cut.
+    var hair = 0
     /// One accessory found in a box, if you're wearing one.
     var accessory: Accessory?
     /// Boosting accessories being worn. These stack.
@@ -42,6 +44,7 @@ enum LookOptions {
     static let patterns: [String?] = ["star.fill", "heart.fill", "bolt.fill", "moon.fill", "pawprint.fill", nil]
     /// Cap colours; index 0 = no cap.
     static let caps: [Color?] = [nil, .red, Color(red: 0.2, green: 0.4, blue: 0.9), .green, Color(white: 0.15), .orange, .purple]
+    static let hairStyles = ["Classic", "Spiky", "Curly", "Long", "Ponytail", "Buzz cut", "Bob", "Mohawk"]
     /// Extra colours unlocked in the secret room of Side Level 1.
     static let extraShirts: [Color] = [
         Color(white: 0.15), .white, Color(red: 0.55, green: 0.95, blue: 0.45), Color(red: 0.45, green: 0.30, blue: 0.85),
@@ -197,6 +200,20 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: .orange
         case .cloud: Color(red: 0.8, green: 0.92, blue: 1)
         case .guidesHat: GuidesHat.color
+        }
+    }
+
+    /// Where it came from and how it was made or found.
+    var origin: String {
+        switch self {
+        case .coolCap: "Dad won it at a school fair before you were born, then lost it in a box. The can on top is glued there. Nobody admits to gluing it."
+        case .leaf: "It fell from the oldest tree in the garden on a night with no wind at all, and it has never dried out."
+        case .lightningBall: "A marble that was left on the roof during a thunderstorm. It has hummed ever since."
+        case .windCrown: "Folded from a kite that got away. Whoever wears it always has the wind at their back."
+        case .goldenCrown: "Grandpa made it from festival lantern foil, one year when the two of you got there early."
+        case .arrow: "From an old toy archery set. The bow is long gone; the arrow still wants to fly forward."
+        case .cloud: "A scrap of morning fog that got caught in the garden hedge and never left."
+        case .guidesHat: "The Guide's own hat. Nobody knows who made it, and he only lends it to people he chooses himself."
         }
     }
 
@@ -497,6 +514,7 @@ final class GameState {
             look.shirt = defaults.integer(forKey: p + "shirt")
             look.pattern = defaults.integer(forKey: p + "pattern")
             look.cap = defaults.integer(forKey: p + "cap")
+            look.hair = defaults.integer(forKey: p + "hair")
             look.accessory = Accessory.find(defaults.string(forKey: p + "accessory") ?? "")
             look.boosts = Set((defaults.stringArray(forKey: p + "wornBoosts") ?? []).compactMap(Boost.init(rawValue:)))
             look.hiddenBoosts = Set((defaults.stringArray(forKey: p + "hiddenBoosts") ?? []).compactMap(Boost.init(rawValue:)))
@@ -679,6 +697,13 @@ final class GameState {
     }
     var dungeonUnlocked: Bool { dungeonRequirements.allSatisfy(\.met) }
 
+    /// Side Level 3 (Uncle's car): every level won and 30 badges. It isn't needed for the Lore or creative mode.
+    var carRequirements: [(text: String, met: Bool)] {
+        [("Win every level", allLevelsWon),
+         ("Earn 30 badges (\(min(badges.count, 30))/30)", badges.count >= 30)]
+    }
+    var carUnlocked: Bool { carRequirements.allSatisfy(\.met) }
+
     private func endgame(badges count: Int) -> [(text: String, met: Bool)] {
         [("Win every level", allLevelsWon),
          ("Finish every side level", allSidesDone),
@@ -735,6 +760,7 @@ final class GameState {
         defaults.set(look.shirt, forKey: p + "shirt")
         defaults.set(look.pattern, forKey: p + "pattern")
         defaults.set(look.cap, forKey: p + "cap")
+        defaults.set(look.hair, forKey: p + "hair")
         defaults.set(look.accessory?.id, forKey: p + "accessory")
         defaults.set(look.boosts.map(\.rawValue), forKey: p + "wornBoosts")
         defaults.set(look.hiddenBoosts.map(\.rawValue), forKey: p + "hiddenBoosts")

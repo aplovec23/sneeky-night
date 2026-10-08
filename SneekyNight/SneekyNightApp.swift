@@ -51,6 +51,8 @@ struct ContentView: View {
                 FitToPhone(night: true) { UpdateLogView(onBack: { screen = .title }) }
             case .sideLevels:
                 FitToPhone(night: true) { SideLevelsView(onPlay: { screen = .side($0) }, onBack: { screen = .title }) }
+            case .side(3):
+                UncleCarView(onExit: { screen = .sideLevels })
             case .side(2):
                 DungeonLevelView(onExit: { screen = .sideLevels })
             case .side:

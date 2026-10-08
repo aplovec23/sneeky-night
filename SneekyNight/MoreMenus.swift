@@ -139,13 +139,16 @@ struct SideLevelsView: View {
                 Text("Extra places off the main path. Each one needs a few things first.")
                     .font(.game(22, .semibold))
                     .foregroundStyle(.white.opacity(0.8))
-                HStack(alignment: .top, spacing: 24) {
+                HStack(alignment: .top, spacing: 16) {
                     card(1, "The Other Hallway", "signpost.right.fill",
                          "The hallway behind your room. Find the 5 keys hidden in the boxes to open the other door. Boosts turn up a little more often here!",
                          game.sideLevelRequirements)
                     card(2, "The Dungeon", "diamond.fill",
                          "Mine glowing orbs and spend them on upgrades (speed goes up to ×5.7!), accessories and demo-only exclusives. It never ends, but the quest board has a quest.",
                          game.dungeonRequirements)
+                    card(3, "Uncle's Car", "car.fill",
+                         "Hop into Uncle's car behind the hotel and ride to the city where Auntie lives. She knows where Grandpa is. Still in the car after 10 minutes? You'll see a little of Level 6.",
+                         game.carRequirements)
                 }
                 Spacer()
             }
@@ -163,10 +166,12 @@ struct SideLevelsView: View {
                     Image(systemName: "star.fill").foregroundStyle(Palette.gold)
                 }
             }
-            .font(.game(30, .heavy))
+            .font(.game(25, .heavy))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .foregroundStyle(.white)
             Text(about)
-                .font(.game(19, .medium))
+                .font(.game(17, .medium))
                 .foregroundStyle(.white.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(needs, id: \.text) { need in
@@ -175,7 +180,7 @@ struct SideLevelsView: View {
                         .foregroundStyle(need.met ? .green : .white.opacity(0.5))
                     Text(need.text)
                 }
-                .font(.game(20, .semibold))
+                .font(.game(17, .semibold))
                 .foregroundStyle(.white)
             }
             if open {
@@ -188,8 +193,8 @@ struct SideLevelsView: View {
                     .padding(.top, 8)
             }
         }
-        .padding(24)
-        .frame(width: 500, alignment: .leading)
+        .padding(20)
+        .frame(width: 356, alignment: .leading)
         .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 28))
     }
 }
@@ -476,6 +481,8 @@ struct LoreView: View {
          "Mined from glowing rocks in the dungeon and spent at the Orb Shop."),
         ("The golden stick", "questionmark", Palette.gold,
          "Very, very rare. It's on the roof... sometimes."),
+        ("Drawing paper", "pencil.and.scribble", .white,
+         "Next to the toy chest in your brother's room. Grab a sheet and draw whatever you like; the game stops while you draw."),
         ("The hotel elevator", "arrow.up.arrow.down.square.fill", .orange,
          "Ten floor buttons and no hints. Uncle's room could be on any of them."),
     ]
@@ -556,6 +563,14 @@ struct LoreView: View {
                                 .font(.game(18, .medium))
                                 .foregroundStyle(.white.opacity(0.88))
                                 .fixedSize(horizontal: false, vertical: true)
+                            if let origin = ItemLore.origin(of: entry.title) {
+                                Text("Where it came from: \(origin)")
+                                    .font(.game(16, .medium))
+                                    .italic()
+                                    .foregroundStyle(Palette.gold.opacity(0.95))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.top, 2)
+                            }
                         }
                     }
                 }
@@ -584,7 +599,7 @@ struct LoreView: View {
 
     static let pages: [(title: String, symbol: String, text: String)] = [
         ("Why sneak out?", "moon.stars.fill",
-         "One night every year, the Lantern Festival lights up the city across the river. Grandpa used to take you. This year his knees won't let him travel, so you made him a promise: you'd bring a lantern back for him. Mom and Dad said \"next year\". You decided next year was too far away. The festival ends at sunrise, so you have exactly one night."),
+         "One night every year, the Lantern Festival lights up the city across the river. Grandpa always took you. This year he didn't come, and whenever you ask where he is, the grown-ups change the subject. So you made a promise to yourself: find Grandpa, and bring him a lantern. Uncle says Auntie knows where he is, and she lives in the next city. The festival ends at sunrise, so you have exactly one night."),
         ("Mom", "heart.fill",
          "Mom has slept lightly ever since you were a baby. One creak and she's awake. She keeps a spare key in her jewelry box because she always loses the first one, and her phone passcode is 12345 because it's the only one she can remember. She isn't angry when she finds you. She's scared you'll get lost. And yes, she really does get up before the sun to cook breakfast."),
         ("Dad", "mustache.fill",
@@ -716,6 +731,47 @@ struct LoreView: View {
     }
 }
 
+/// Where every item came from, and how it was made or found. Shown under each entry in the Lore.
+enum ItemLore {
+    static func origin(of title: String) -> String? {
+        let name = title.replacingOccurrences(of: "  ✓", with: "")
+        if let boost = Boost.allCases.first(where: { $0.name == name }) { return boost.origin }
+        return origins[name]
+    }
+
+    static let origins: [String: String] = [
+        "Vines (V)": "The strange bush grew from a seed Grandpa brought home from the festival years ago. Nobody ever planted it; it planted itself.",
+        "Brother's toy (G)": "A birthday present from Auntie. Its squeaker has been repaired with sticky tape three times.",
+        "The bat (B)": "Dad's bat from when he was nine. He hid it in a box so Mom wouldn't find out about the broken window.",
+        "Lightning Ball power (F)": "It comes from the marble inside the Lightning Ball, which soaked up a whole thunderstorm on the roof.",
+        "Cloud ride (X)": "The cloud remembers being fog over the river, and carries you the way it used to drift.",
+        "Zoom Slippers and Spring Socks": "Knitted by Grandma. She always made things a little too fast and a little too bouncy.",
+        "Silent Slippers": "Mom bought them so she wouldn't wake YOU when you were a baby. They've been under her bed ever since.",
+        "Keys": "Most were cut by the old locksmith on the corner. The ones you make yourself come from metal scraps and Dad's workbench; the blue one was hung on the dog's collar by Uncle so he'd never lose it.",
+        "Skill papers": "Pages from Grandpa's old notebook, \"How to Be Quick and Quiet\". Someone tore them out and hid them at the bottom of boxes.",
+        "Star balls": "Tiny pieces of shooting stars. They only land on roofs where somebody is awake to catch them.",
+        "Orbs": "They grow inside the dungeon rocks like pearls in a shell. The shopkeeper says the first one was found by a lost miner's lantern.",
+        "The golden stick": "Nobody made it and nobody has found it twice. Some say the owl drops it. The owl isn't saying.",
+        "The hotel elevator": "Built the same year as the hotel. Uncle swears it rearranges the floors when nobody is looking.",
+        "Drawing paper": "Auntie posts your brother a fresh pad every birthday. He draws on the first page and saves the rest \"for something important\".",
+        "Glasses": "Lost and found: every pair was left behind by a visitor and forgotten in a box.",
+        "Crown": "Cut from a cereal box for a school play. It was never returned.",
+        "Bow Ties": "Dad wore one to every wedding he ever went to. He has been to a lot of weddings.",
+        "Scarves": "Grandma's knitting again. She never made two the same colour.",
+        "Capes": "Old curtains, cut down and hemmed by Mom for superhero days.",
+        "Headbands": "Sweatbands from Mom's running club. Tie one on and you feel like a ninja.",
+        "Cat Ears": "From a costume party three years ago. The cat costume itself has never been seen again.",
+        "Headphones": "Uncle's old pair from the hotel's lost property. One side is a tiny bit louder.",
+        "Halo": "A bent lampshade ring that somehow still glows a little.",
+        "Party Hats": "Left over from birthdays. Each one still has a bit of cake on the elastic.",
+        "Beanies": "Winter hats that the rats have borrowed and, for once, given back.",
+        "Top Hats": "From the hotel's magic-show night. No rabbit has come out of any of them. Yet.",
+        "Hair Bows": "Ribbons saved from every present Auntie ever sent.",
+        "Flowers": "Picked from the garden maze. They stay fresh as long as the plants get watered.",
+        "Demo exclusives": "Made by the Orb Shop's keeper out of orb dust. They only exist while the game is a demo.",
+    ]
+}
+
 // MARK: - Update log
 
 struct UpdateLogView: View {
@@ -723,6 +779,14 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Uncle's car and cool things", [
+            "New side level: Uncle's car. Hop in behind the hotel and ride to Auntie's city. Stay for the whole 10 minutes and you'll see scenes from Level 6: Auntie's House.",
+            "Have a real conversation with your brother: pick \"Let's talk\" and choose what to talk about.",
+            "Hair styles! Eight of them, in Customize Character.",
+            "Every item in the Lore now says where it came from and how it was made or found.",
+            "The roof is much bigger. Walk to either edge to look down at the street and the garden.",
+            "Grab drawing paper next to your brother's toy chest and draw.",
+        ]),
         ("Sneeky Nights: better performance and more fun", [
             "The game runs smoother: less work every frame when drawing rooms and checking what's next to you.",
             "The Level Maker has no limits now: as many objects and hazards as you like, and levels as long as you like.",

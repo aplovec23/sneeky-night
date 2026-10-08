@@ -48,6 +48,8 @@ final class DownstairsModel {
     var doorLocked = false
     var stars = 0
     var showPhone = false
+    /// The drawing pad is open (paper from your brother's room).
+    var drawing = false
     var showKeypad = false
 
     // Grown-ups
@@ -95,6 +97,8 @@ final class DownstairsModel {
     @ObservationIgnored private var momTime = 0.0
     @ObservationIgnored private var lockTime = 0.0
     @ObservationIgnored private var starTime = 3.0
+    @ObservationIgnored private var sawStreet = false
+    @ObservationIgnored private var sawGarden = false
     @ObservationIgnored private var starCount = 0
 
     static let floor = HallwayModel.floor
@@ -104,7 +108,7 @@ final class DownstairsModel {
     static let lockboxSpots = ["lockbox1", "lockbox2", "lockbox3", "lockbox4", "lockbox5"]
     static let widths: [Room: CGFloat] = [.stairs: 1800, .downstairs: 3000, .garage: 1500, .basement: 1900, .yard: 1600,
                                           .hallway: HallwayModel.hallWidth, .brotherRoom: HallwayModel.roomWidth,
-                                          .momRoom: HallwayModel.momRoomWidth, .roof: 1400]
+                                          .momRoom: HallwayModel.momRoomWidth, .roof: DownstairsModel.roofWidth]
 
     var inventory: [InventoryItem] {
         var items: [InventoryItem] = []
@@ -340,10 +344,15 @@ final class DownstairsModel {
         }
     }
 
+    /// The roof runs the whole length of the house. The window is 830 along; past each end
+    /// (`roofEdge` from either side) you look down on the street or the garden.
+    static let roofWidth: CGFloat = 3400
+    static let roofEdge: CGFloat = 560
+
     static func roofThings() -> [Thing] {
         [
-            wall("roofWindow", "roofWindow", x: 130, prompt: "Climb back inside", reach: 90),
-            wall("owl", "owl", x: 805, prompt: "Look at the chimney", reach: 60),
+            wall("roofWindow", "roofWindow", x: 830, prompt: "Climb back inside", reach: 90),
+            wall("owl", "owl", x: 1505, prompt: "Look at the chimney", reach: 60),
         ]
     }
 
@@ -453,6 +462,7 @@ final class DownstairsModel {
         case "dresser", "nightstand": engine.say("Empty. I already took everything from here.")
         case "bedroomDoor": engine.say("Back to bed? No way!")
         case "toyChest": grabToy()
+        case "paper": startDrawing()
         case "sibBed": talkToBrother()
         case "momNightstand": usePhone()
         case "vanity": engine.say("Just Mom's earrings. Better not touch those.")
@@ -668,10 +678,23 @@ final class DownstairsModel {
     private func useHallwayWindow() {
         if hasLadder {
             Sound.window.play()
-            go(to: .roof, at: CGPoint(x: 230, y: 610))
+            go(to: .roof, at: CGPoint(x: 930, y: 610))
         } else {
             engine.say("Just the quiet street. If only I had a ladder to climb out...")
         }
+    }
+
+
+    private func startDrawing() {
+        Sound.paper.play()
+        drawing = true
+        engine.paused = true
+    }
+
+    func finishDrawing() {
+        drawing = false
+        engine.paused = false
+        engine.say("Not bad! I'll show Grandpa.", seconds: 2.2)
     }
 
     private func grabToy() {
@@ -1057,6 +1080,15 @@ final class DownstairsModel {
     /// Star balls appear on the roof now and then; each one makes you 6% faster for the rest of the level.
     private func tickRoof(_ dt: Double) {
         guard room == .roof else { return }
+        // Walk out to either end of the roof and you can see the outside of the house from above.
+        if !sawStreet && engine.player.x < Self.roofEdge - 120 {
+            sawStreet = true
+            engine.say("Whoa! I can see the whole street from up here.", seconds: 3)
+        }
+        if !sawGarden && engine.player.x > Self.roofWidth - Self.roofEdge + 120 {
+            sawGarden = true
+            engine.say("There's the garden maze! It looks tiny from the roof.", seconds: 3)
+        }
         starTime -= dt
         let balls = engine.things.filter { $0.kind == "starBall" }
         // Boosting accessories are much easier to find up here: about one a minute.
@@ -1064,7 +1096,7 @@ final class DownstairsModel {
         if boostTime <= 0 {
             boostTime = Double.random(in: 50...70)
             if newBoost() != nil && !engine.things.contains(where: { $0.kind == "boostBall" }) {
-                engine.things.append(Thing(id: "boostBall", kind: "boostBall", pos: CGPoint(x: .random(in: 320...1300), y: .random(in: 570...680)),
+                engine.things.append(Thing(id: "boostBall", kind: "boostBall", pos: CGPoint(x: .random(in: 640...2760), y: .random(in: 570...680)),
                                            footprint: CGSize(width: 36, height: 30)))
                 engine.say("Something glowing just landed on the roof!", seconds: 2.5)
             }
@@ -1080,14 +1112,14 @@ final class DownstairsModel {
         if starTime <= 0 {
             // The golden stick: a 0.000000000001 chance each time a star would appear.
             if Double.random(in: 0..<1) < 0.000000000001 {
-                engine.things.append(Thing(id: "goldenStick", kind: "goldenStick", pos: CGPoint(x: .random(in: 320...1300), y: .random(in: 570...680)),
+                engine.things.append(Thing(id: "goldenStick", kind: "goldenStick", pos: CGPoint(x: .random(in: 640...2760), y: .random(in: 570...680)),
                                            footprint: CGSize(width: 36, height: 30)))
             }
             starTime = Double.random(in: 4...7)
             if balls.count < 3 {
                 starCount += 1
                 engine.things.append(Thing(id: "star\(starCount)", kind: "starBall",
-                                           pos: CGPoint(x: .random(in: 320...1300), y: .random(in: 570...680)),
+                                           pos: CGPoint(x: .random(in: 640...2760), y: .random(in: 570...680)),
                                            footprint: CGSize(width: 36, height: 30)))
             }
         }
@@ -1157,7 +1189,7 @@ final class DownstairsModel {
         case .downstairs: (CGPoint(x: 110, y: 600), 6)
         case .garage, .basement: (CGPoint(x: 110, y: 600), 7)
         case .yard: (CGPoint(x: 170, y: 600), 7)
-        case .roof: (CGPoint(x: 130, y: 600), 6)
+        case .roof: (CGPoint(x: 830, y: 600), 6)
         }
     }
 
@@ -1347,6 +1379,7 @@ struct DownstairsLevelView: View {
                              onNoteRead: model.phoneNoteRead, onFiveFails: { game.award(.passcode) },
                              onOpenApp: { if $0 == "Music" { game.award(.fireMusic) } }, onClose: model.closePhone)
             }
+            if model.drawing { DrawingPad(onDone: model.finishDrawing) }
             if model.buddy.talking {
                 TalkOverlay(buddy: model.buddy, tip: model.tip,
                             onGiveToy: giveToyAction, onClose: model.closeTalk)
@@ -1473,6 +1506,7 @@ struct DownstairsLevelView: View {
         case "roofWindow": RoofWindowView()
         case "owl": OwlView()
         case "toyChest": ToyChestView()
+        case "paper": PaperStackView()
         case "dadDesk": DadDeskView()
         case "dresser": DresserView(open: thing.open)
         case "nightstand": NightstandView(open: thing.open)

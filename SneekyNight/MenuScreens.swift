@@ -284,6 +284,13 @@ struct CustomizeView: View {
                                 }
                             }
                         }
+                        section("Hair style") {
+                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(124), spacing: 10), count: 4), alignment: .leading, spacing: 10) {
+                                ForEach(LookOptions.hairStyles.indices, id: \.self) { i in
+                                    chip(LookOptions.hairStyles[i], selected: look.hair == i) { look.hair = i }
+                                }
+                            }
+                        }
                         section("Skin tone") {
                             HStack(spacing: 12) {
                                 ForEach(LookOptions.skins.indices, id: \.self) { i in
@@ -419,7 +426,10 @@ struct CustomizeView: View {
         Button(action: pick(action)) {
             Text(title)
                 .font(.game(24))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .foregroundStyle(.white)
+                .padding(.horizontal, 6)
                 .frame(width: 120, height: 52)
                 .background(.white.opacity(selected ? 0.3 : 0.08), in: Capsule())
                 .overlay(Capsule().stroke(selected ? Palette.gold : .white.opacity(0.2), lineWidth: selected ? 4 : 2))

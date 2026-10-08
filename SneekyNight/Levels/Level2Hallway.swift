@@ -23,6 +23,8 @@ final class HallwayModel {
     var windowOpen = false
     /// Which funny view is showing through the window, if any.
     var windowView: Int?
+    /// The drawing pad is open (paper from your brother's room).
+    var drawing = false
     var codeAccepted = false
     var doorOpen = false
     /// Mom or Dad coming after you (after noise, a bump, the clock, or Dad spotting you).
@@ -233,6 +235,7 @@ final class HallwayModel {
             onWall("hallDoor", "hallDoor", x: 110, prompt: "Back to the hallway"),
             onWall("sibCloset", "closet", x: 310, prompt: "Hide in the closet"),
             onWall("toyChest", "toyChest", x: 640, prompt: "Grab a toy", reach: 60),
+            onWall("paper", "paper", x: 800, prompt: "Grab paper and draw", reach: 55),
             obstacle("blocks", .toy, x: 520, y: 605, size: CGSize(width: 54, height: 26)),
             obstacle("duck", .toy, x: 780, y: 682, size: CGSize(width: 40, height: 20)),
             car, ball, robot,
@@ -314,6 +317,10 @@ final class HallwayModel {
         case "bedroomDoor": engine.say("Back to bed? No way! I'm sneaking out!")
         case "exitDoor": useExitDoor()
         case "sibBed": talkToBrother()
+        case "paper":
+            Sound.paper.play()
+            drawing = true
+            engine.paused = true
         case "toyChest":
             if toyInHand {
                 engine.say("One toy at a time.")
@@ -390,6 +397,12 @@ final class HallwayModel {
         guard room == .siblingRoom || buddy.state == .following else { return }
         engine.running = false
         buddy.startTalking()
+    }
+
+    func finishDrawing() {
+        drawing = false
+        engine.paused = false
+        engine.say("Not bad! I'll show Grandpa.", seconds: 2.2)
     }
 
     func closeTalk() {
@@ -874,6 +887,7 @@ struct HallwayLevelView: View {
                 WindowViewOverlay(scene: scene, onClose: model.closeWindowView)
                     .transition(.opacity)
             }
+            if model.drawing { DrawingPad(onDone: model.finishDrawing) }
             if model.buddy.talking {
                 TalkOverlay(buddy: model.buddy, tip: model.brotherTip,
                             onGiveToy: giveToyAction, onClose: model.closeTalk)
@@ -985,6 +999,7 @@ struct HallwayLevelView: View {
         case "momBed": MomBedView(empty: model.chase.momOut)
         case "momNightstand": AlarmNightstandView(turnedBack: thing.open)
         case "toyChest": ToyChestView()
+        case "paper": PaperStackView()
         case "dadDesk": DadDeskView()
         default: EmptyView()
         }

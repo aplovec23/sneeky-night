@@ -104,12 +104,7 @@ struct CharacterView: View {
                     .rotationEffect(.degrees(8 + swing * 6), anchor: .top)
                     .position(x: 34, y: 96)
             }
-            if look.gender == .girl {
-                RoundedRectangle(cornerRadius: 22)
-                    .fill(hair)
-                    .frame(width: 62, height: 66)
-                    .position(x: 50, y: 50)
-            }
+            hairBehind
             arm(backArm).position(x: 50, y: 82)
             RoundedRectangle(cornerRadius: 14)
                 .fill(shirt)
@@ -130,15 +125,7 @@ struct CharacterView: View {
                 Capsule().fill(cap).brightness(-0.12).frame(width: 30, height: 9).position(x: 76, y: 31)
                 Circle().fill(.white.opacity(0.85)).frame(width: 7).position(x: 50, y: 5)
             } else {
-                Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
-                Capsule().fill(hair).frame(width: 30, height: 12).rotationEffect(.degrees(-12)).position(x: 60, y: 18)
-                if look.gender == .girl {
-                    HStack(spacing: 2) {
-                        Circle().fill(Color.pink).frame(width: 13)
-                        Circle().fill(Color.pink).frame(width: 13)
-                    }
-                    .position(x: 34, y: 14)
-                }
+                hairOnTop
             }
             // Face, looking toward the facing direction.
             if taunting {
@@ -162,6 +149,72 @@ struct CharacterView: View {
 }
 
 extension CharacterView {
+    private var style: Int { abs(look.hair) % LookOptions.hairStyles.count }
+
+    /// Hair that hangs behind the head (drawn before the head, so it shows even under a cap).
+    @ViewBuilder fileprivate var hairBehind: some View {
+        switch style {
+        case 0:
+            if look.gender == .girl {
+                RoundedRectangle(cornerRadius: 22).fill(hair).frame(width: 62, height: 66).position(x: 50, y: 50)
+            }
+        case 3: RoundedRectangle(cornerRadius: 24).fill(hair).frame(width: 64, height: 92).position(x: 48, y: 62)
+        case 4:
+            Capsule().fill(hair).frame(width: 18, height: 50).rotationEffect(.degrees(28)).position(x: 16, y: 50)
+            Circle().fill(Color.pink).frame(width: 10).position(x: 24, y: 30)
+        case 6: RoundedRectangle(cornerRadius: 16).fill(hair).frame(width: 66, height: 54).position(x: 50, y: 44)
+        default: EmptyView()
+        }
+    }
+
+    /// Hair on top of the head (hidden by a cap).
+    @ViewBuilder fileprivate var hairOnTop: some View {
+        switch style {
+        case 1:
+            // Spiky
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 36)
+            ForEach(0..<5, id: \.self) { i in
+                Triangle().fill(hair).frame(width: 16, height: 22)
+                    .rotationEffect(.degrees(Double(i - 2) * 22))
+                    .position(x: 26 + CGFloat(i) * 12, y: 6 + abs(CGFloat(i) - 2) * 4)
+            }
+        case 2:
+            // Curly
+            ForEach(0..<7, id: \.self) { i in
+                Circle().fill(hair).frame(width: 22)
+                    .position(x: 24 + CGFloat(i) * 9, y: 20 - sin(CGFloat(i) / 6 * .pi) * 14)
+            }
+            Circle().fill(hair).frame(width: 20).position(x: 24, y: 30)
+        case 3:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 60, height: 60).position(x: 50, y: 35)
+            Capsule().fill(hair).frame(width: 34, height: 13).rotationEffect(.degrees(-16)).position(x: 62, y: 18)
+        case 4:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            Capsule().fill(hair).frame(width: 26, height: 11).rotationEffect(.degrees(-10)).position(x: 62, y: 17)
+        case 5:
+            // Buzz cut: short and close to the head
+            Circle().trim(from: 0.56, to: 0.97).fill(hair).brightness(-0.05).frame(width: 55, height: 55).position(x: 50, y: 38)
+        case 6:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 60, height: 60).position(x: 50, y: 35)
+            RoundedRectangle(cornerRadius: 5).fill(hair).frame(width: 34, height: 12).position(x: 60, y: 22)
+        case 7:
+            // Mohawk
+            Circle().trim(from: 0.56, to: 0.97).fill(hair).brightness(-0.08).frame(width: 55, height: 55).position(x: 50, y: 38)
+            Capsule().fill(hair).frame(width: 44, height: 18).position(x: 50, y: 7)
+            Capsule().fill(hair).brightness(0.08).frame(width: 30, height: 12).position(x: 54, y: 2)
+        default:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            Capsule().fill(hair).frame(width: 30, height: 12).rotationEffect(.degrees(-12)).position(x: 60, y: 18)
+            if look.gender == .girl {
+                HStack(spacing: 2) {
+                    Circle().fill(Color.pink).frame(width: 13)
+                    Circle().fill(Color.pink).frame(width: 13)
+                }
+                .position(x: 34, y: 14)
+            }
+        }
+    }
+
     /// The one accessory being worn, drawn over the figure (capes are drawn behind, above),
     /// followed by any boosting accessories, which all show at once.
     @ViewBuilder fileprivate var accessory: some View {

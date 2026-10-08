@@ -187,18 +187,30 @@ struct YardScene: View {
 struct RoofScene: View {
     let width: CGFloat
 
+    /// How far in from each end the look-outs reach.
+    private let edge = DownstairsModel.roofEdge
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             LinearGradient(colors: [Palette.skyTop, Color(red: 0.22, green: 0.16, blue: 0.44)], startPoint: .top, endPoint: .bottom)
                 .frame(width: width, height: 700)
-            ForEach(0..<60, id: \.self) { i in
-                Circle().fill(.white.opacity(0.85)).frame(width: CGFloat(2 + i % 3))
+            ForEach(0..<120, id: \.self) { i in
+                Circle().fill(.white.opacity(0.85 * max(Palette.starlight, 0.15))).frame(width: CGFloat(2 + i % 3))
                     .position(x: CGFloat((i * 151) % Int(width)), y: CGFloat((i * 67) % 440))
             }
-            Circle().fill(Palette.moon).frame(width: 130).shadow(color: Palette.moon, radius: 36).position(x: 1050, y: 150)
-            // Chimney
-            Rectangle().fill(Color(red: 0.45, green: 0.22, blue: 0.18)).frame(width: 90, height: 170).offset(x: 760, y: 330)
-            Rectangle().fill(Color(red: 0.30, green: 0.15, blue: 0.12)).frame(width: 110, height: 22).offset(x: 750, y: 316)
+            Circle().fill(Palette.moon).frame(width: 130).shadow(color: Palette.moon, radius: 36).position(x: 1750, y: 150)
+            // Looking down past each end of the roof: the street on one side, the garden on the other.
+            streetBelow.frame(width: edge, height: 330).position(x: edge / 2, y: 315)
+            gardenBelow.frame(width: edge, height: 330).position(x: width - edge / 2, y: 315)
+            // Chimneys, a skylight and the TV aerial
+            chimney.offset(x: 1450, y: 316)
+            chimney.scaleEffect(0.8, anchor: .bottom).offset(x: 2380, y: 316)
+            RoundedRectangle(cornerRadius: 8).fill(Color.yellow.opacity(0.35)).frame(width: 150, height: 70)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(white: 0.25), lineWidth: 6)).position(x: 2000, y: 440)
+            Rectangle().fill(Color(white: 0.2)).frame(width: 6, height: 150).position(x: 2700, y: 405)
+            ForEach(0..<3, id: \.self) { i in
+                Rectangle().fill(Color(white: 0.2)).frame(width: 70 - CGFloat(i) * 16, height: 5).position(x: 2700, y: 340 + CGFloat(i) * 22)
+            }
             // Shingles
             Rectangle().fill(Color(red: 0.34, green: 0.20, blue: 0.24)).frame(width: width, height: 220).offset(y: 480)
             ForEach(0..<5, id: \.self) { row in
@@ -209,7 +221,81 @@ struct RoofScene: View {
                 }
                 .offset(x: row % 2 == 0 ? 0 : -32, y: 484 + CGFloat(row) * 44)
             }
+            // Gutters at the two ends
+            Rectangle().fill(Color(white: 0.55)).frame(width: 14, height: 220).offset(x: 0, y: 480)
+            Rectangle().fill(Color(white: 0.55)).frame(width: 14, height: 220).offset(x: width - 14, y: 480)
         }
+    }
+
+    private var chimney: some View {
+        ZStack(alignment: .top) {
+            Rectangle().fill(Color(red: 0.45, green: 0.22, blue: 0.18)).frame(width: 90, height: 170).offset(y: 14)
+            Rectangle().fill(Color(red: 0.30, green: 0.15, blue: 0.12)).frame(width: 110, height: 22)
+        }
+        .frame(width: 110, height: 184, alignment: .top)
+    }
+
+    /// The street in front of the house, seen from the roof: road, lamp light, the neighbours' roofs.
+    private var streetBelow: some View {
+        ZStack {
+            Color(red: 0.16, green: 0.17, blue: 0.24)
+            Rectangle().fill(Color(red: 0.26, green: 0.26, blue: 0.32)).frame(height: 90).offset(y: 30)
+            HStack(spacing: 38) {
+                ForEach(0..<7, id: \.self) { _ in Rectangle().fill(.white.opacity(0.5)).frame(width: 34, height: 5) }
+            }
+            .offset(y: 30)
+            // Neighbours' rooftops
+            ForEach(0..<4, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 4)
+                    .fill([Color(red: 0.45, green: 0.25, blue: 0.28), Color(red: 0.28, green: 0.32, blue: 0.45),
+                           Color(red: 0.40, green: 0.33, blue: 0.22), Color(red: 0.25, green: 0.38, blue: 0.34)][i])
+                    .frame(width: 110, height: 70)
+                    .overlay(Rectangle().fill(.black.opacity(0.25)).frame(height: 3))
+                    .position(x: 80 + CGFloat(i) * 135, y: 62)
+            }
+            // Lamp light and a parked car
+            ForEach(0..<3, id: \.self) { i in
+                Circle().fill(RadialGradient(colors: [.yellow.opacity(0.6), .clear], center: .center, startRadius: 2, endRadius: 46))
+                    .frame(width: 92).position(x: 110 + CGFloat(i) * 180, y: 250)
+                Circle().fill(.yellow).frame(width: 9).position(x: 110 + CGFloat(i) * 180, y: 250)
+            }
+            RoundedRectangle(cornerRadius: 8).fill(Color(red: 0.75, green: 0.2, blue: 0.22)).frame(width: 64, height: 30).position(x: 400, y: 212)
+            RoundedRectangle(cornerRadius: 5).fill(Color.cyan.opacity(0.5)).frame(width: 30, height: 20).position(x: 398, y: 212)
+            Text("THE STREET").font(.game(15, .heavy)).foregroundStyle(.white.opacity(0.4)).position(x: 80, y: 310)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.18), lineWidth: 3))
+        .padding(14)
+    }
+
+    /// The back garden seen from the roof: the hedge maze, the gate and the two dogs.
+    private var gardenBelow: some View {
+        ZStack {
+            Color(red: 0.16, green: 0.36, blue: 0.22)
+            // Hedges: a little grid with gaps, like the real maze
+            ForEach(0..<7, id: \.self) { row in
+                ForEach(0..<10, id: \.self) { col in
+                    if (row * 3 + col * 5) % 4 != 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color(red: 0.08, green: 0.24, blue: 0.14))
+                            .frame(width: (row + col) % 2 == 0 ? 40 : 9, height: (row + col) % 2 == 0 ? 9 : 34)
+                            .position(x: 52 + CGFloat(col) * 46, y: 40 + CGFloat(row) * 36)
+                    }
+                }
+            }
+            // Flowers, the gate, the dogs
+            ForEach(0..<14, id: \.self) { i in
+                Circle().fill([Color.pink, .yellow, .white, .orange][i % 4]).frame(width: 6)
+                    .position(x: CGFloat((i * 97) % 470) + 40, y: CGFloat((i * 53) % 230) + 30)
+            }
+            RoundedRectangle(cornerRadius: 3).fill(Color(red: 0.55, green: 0.40, blue: 0.25)).frame(width: 12, height: 50).position(x: 505, y: 150)
+            Ellipse().fill(Color(red: 0.78, green: 0.58, blue: 0.36)).frame(width: 18, height: 11).position(x: 485, y: 132)
+            Ellipse().fill(Color(red: 0.78, green: 0.58, blue: 0.36)).frame(width: 18, height: 11).position(x: 485, y: 170)
+            Text("THE GARDEN").font(.game(15, .heavy)).foregroundStyle(.white.opacity(0.4)).position(x: 440, y: 310)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.18), lineWidth: 3))
+        .padding(14)
     }
 }
 

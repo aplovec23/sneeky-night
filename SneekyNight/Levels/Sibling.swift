@@ -98,11 +98,61 @@ struct TalkOverlay: View {
     /// Set when you're holding a toy you could give him.
     var onGiveToy: (() -> Void)?
     let onClose: () -> Void
+    /// Picking topics for a proper conversation.
+    @State private var chatting = false
+    /// The topic being talked about, and how far into it you are.
+    @State private var topic: Int?
+    @State private var step = 0
+    @State private var yourLine: String?
+
+    /// Things to talk about. Each topic goes back and forth a few times.
+    static let topics: [(title: String, talk: [(you: String, him: String)])] = [
+        ("Where I'm going", [
+            ("I'm going to find Grandpa.", "Grandpa?! But nobody will tell us where he is!"),
+            ("Auntie knows. Uncle's going to drive me to her city.", "Whoa. That's really far. Farther than school."),
+            ("I'll bring him a lantern from the festival.", "Bring me one too? A green one. Please please please."),
+        ]),
+        ("Your toys", [
+            ("Why are your toys ALL over the floor?", "It's not a mess. It's a trap. For burglars."),
+            ("I'm the one who keeps stepping on them!", "...Then the trap works."),
+            ("Which one's your favourite?", "The squeaky one. I only lend it to people I really like."),
+        ]),
+        ("Scary stuff", [
+            ("Are you scared of the dark?", "No! ...A little. Only the bit under the bed."),
+            ("There's only a lockbox under mine.", "That's exactly what a monster would want you to think."),
+            ("I'll check under yours when I'm back.", "Okay. Deal. Don't forget."),
+        ]),
+        ("Mom and Dad", [
+            ("Do you think Mom will be mad?", "She'll do the eyebrow thing. Then she'll hug you really hard."),
+            ("And Dad?", "Dad will laugh, and then pretend he didn't."),
+            ("Cover for me if they ask?", "I'll say you're in the bathroom. For... nine hours."),
+        ]),
+        ("A joke", [
+            ("Tell me a joke.", "Why did the kid bring a ladder to bed?"),
+            ("I don't know. Why?", "To get to HIGH sleep! ...Get it? Like high school?"),
+            ("That was terrible.", "You laughed. I saw your face do the thing."),
+        ]),
+        ("When I'm gone", [
+            ("What will you do while I'm away?", "Build the biggest block tower ever. Up to the ceiling."),
+            ("Don't knock over the lamp.", "No promises."),
+            ("I'll miss you, you know.", "...Me too. Come back fast, okay?"),
+        ]),
+    ]
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.5).ignoresSafeArea()
             VStack(spacing: 16) {
+                if let yourLine {
+                    Text("You: \(yourLine)")
+                        .font(.game(20, .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .frame(width: 420, alignment: .trailing)
+                        .background(Palette.gold, in: RoundedRectangle(cornerRadius: 18))
+                        .frame(width: 516, alignment: .trailing)
+                }
                 HStack(spacing: 16) {
                     CharacterView(look: SiblingBuddy.look, facingRight: true)
                         .scaleEffect(0.8)
@@ -113,6 +163,59 @@ struct TalkOverlay: View {
                         .padding(18)
                         .frame(width: 420, alignment: .leading)
                         .background(.white, in: RoundedRectangle(cornerRadius: 22))
+                }
+                if chatting { conversation } else { menu }
+            }
+            .padding(30)
+            .background(Color(red: 0.14, green: 0.12, blue: 0.30), in: RoundedRectangle(cornerRadius: 34))
+            .overlay(RoundedRectangle(cornerRadius: 34).stroke(Palette.gold.opacity(0.7), lineWidth: 4))
+        }
+    }
+
+    /// A conversation: pick a topic, then it goes back and forth.
+    @ViewBuilder private var conversation: some View {
+        if let topic {
+            let talk = Self.topics[topic].talk
+            if step + 1 < talk.count {
+                option("Keep talking") { say(topic, step + 1) }
+            } else {
+                option("Talk about something else") {
+                    self.topic = nil
+                    yourLine = nil
+                    buddy.line = "What else do you want to talk about?"
+                }
+            }
+            option("That's enough talking") { endChat() }
+        } else {
+            LazyVGrid(columns: [GridItem(.fixed(250), spacing: 12), GridItem(.fixed(250), spacing: 12)], spacing: 10) {
+                ForEach(Self.topics.indices, id: \.self) { i in
+                    option(Self.topics[i].title, width: 250) { say(i, 0) }
+                }
+            }
+            option("That's enough talking") { endChat() }
+        }
+    }
+
+    private func say(_ topic: Int, _ step: Int) {
+        self.topic = topic
+        self.step = step
+        let exchange = Self.topics[topic].talk[step]
+        yourLine = exchange.you
+        buddy.line = exchange.him
+    }
+
+    private func endChat() {
+        chatting = false
+        topic = nil
+        yourLine = nil
+        buddy.line = "That was nice. We should talk more!"
+    }
+
+    @ViewBuilder private var menu: some View {
+        Group {
+                option("Let's talk") {
+                    chatting = true
+                    buddy.line = "Talk? At night? Okay! What about?"
                 }
                 option("What are you doing up?") {
                     buddy.line = "I heard you being silly! Are you sneaking out? That's so cool!"
@@ -144,22 +247,20 @@ struct TalkOverlay: View {
                     buddy.talking = false
                     onClose()
                 }
-            }
-            .padding(30)
-            .background(Color(red: 0.14, green: 0.12, blue: 0.30), in: RoundedRectangle(cornerRadius: 34))
-            .overlay(RoundedRectangle(cornerRadius: 34).stroke(Palette.gold.opacity(0.7), lineWidth: 4))
         }
     }
 
-    private func option(_ title: String, action: @escaping () -> Void) -> some View {
+    private func option(_ title: String, width: CGFloat = 440, action: @escaping () -> Void) -> some View {
         Button {
             SoundPlayer.shared.tap()
             action()
         } label: {
             Text(title)
                 .font(.game(24))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(.white)
-                .frame(width: 440, height: 52)
+                .frame(width: width, height: 52)
                 .background(Color(red: 0.35, green: 0.30, blue: 0.70), in: Capsule())
         }
         .buttonStyle(PressableStyle())
@@ -174,7 +275,7 @@ extension Popup {
             Popup(title: "New accessory!", message: "You found the \(item.name)!\nPut it on in Customize Character on the menu.",
                   symbol: item.symbol, color: item.color == .black ? .white : item.color, button: "Awesome!", action: take)
         case .boost(let boost):
-            Popup(title: "RARE BOOST!", message: "\(boost.name)!\n\(boost.about)\nIt's already on. Boosts stack!",
+            Popup(title: "RARE BOOST!", message: "\(boost.name)!\n\(boost.about)\n\(boost.origin)\nIt's already on. Boosts stack!",
                   symbol: boost.symbol, color: boost.color, button: "WOW!", action: take)
         case .bat:
             Popup(title: "You found a BAT!", message: "Yours to keep forever. Press B to bonk Mom: she sees stars for 2 seconds (ready again after 5).",
