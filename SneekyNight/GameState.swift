@@ -496,6 +496,9 @@ final class GameState {
     /// Dungeon money, and how many orbs you've ever mined (for the dungeon quest).
     var orbs: Int { didSet { save() } }
     var orbsMined: Int { didSet { save() } }
+    /// The cinema: how many seconds into each show you are, and the shows you've watched to the end.
+    var cinemaTime: [Int: Double] { didSet { save() } }
+    var cinemaWatched: Set<Int> { didSet { save() } }
     /// Orb-shop upgrades: how many steps of each stat you've bought.
     var upgrades: [Stat: Int] { didSet { save() } }
     /// Creative mode switched on (only works once it's unlocked).
@@ -552,6 +555,12 @@ final class GameState {
         completedSide = Set(defaults.array(forKey: p + "completedSide") as? [Int] ?? [])
         orbs = defaults.integer(forKey: p + "orbs")
         orbsMined = defaults.integer(forKey: p + "orbsMined")
+        var places: [Int: Double] = [:]
+        for (key, value) in defaults.dictionary(forKey: p + "cinemaTime") as? [String: Double] ?? [:] {
+            if let show = Int(key) { places[show] = value }
+        }
+        cinemaTime = places
+        cinemaWatched = Set(defaults.array(forKey: p + "cinemaWatched") as? [Int] ?? [])
         var bought: [Stat: Int] = [:]
         for (key, value) in defaults.dictionary(forKey: p + "upgrades") as? [String: Int] ?? [:] {
             if let stat = Stat(rawValue: key) { bought[stat] = value }
@@ -799,6 +808,8 @@ final class GameState {
         defaults.set(Array(completedSide), forKey: p + "completedSide")
         defaults.set(orbs, forKey: p + "orbs")
         defaults.set(orbsMined, forKey: p + "orbsMined")
+        defaults.set(Dictionary(uniqueKeysWithValues: cinemaTime.map { (String($0.key), $0.value) }), forKey: p + "cinemaTime")
+        defaults.set(Array(cinemaWatched), forKey: p + "cinemaWatched")
         defaults.set(Dictionary(uniqueKeysWithValues: upgrades.map { ($0.key.rawValue, $0.value) }), forKey: p + "upgrades")
         defaults.set(creativeOn, forKey: p + "creativeOn")
         defaults.set(caughtCount, forKey: p + "caughtCount")

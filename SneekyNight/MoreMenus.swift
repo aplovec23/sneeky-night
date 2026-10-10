@@ -136,10 +136,10 @@ struct SideLevelsView: View {
             NightSky()
             VStack(spacing: 20) {
                 MenuHeader(title: "Side Levels", onBack: onBack)
-                Text("Extra places off the main path. Each one needs a few things first.")
+                Text("Extra places off the main path. Most of them need a few things first.")
                     .font(.game(22, .semibold))
                     .foregroundStyle(.white.opacity(0.8))
-                HStack(alignment: .top, spacing: 16) {
+                LazyVGrid(columns: [GridItem(.fixed(548), spacing: 16, alignment: .top), GridItem(.fixed(548), spacing: 16, alignment: .top)], spacing: 16) {
                     card(1, "The Other Hallway", "signpost.right.fill",
                          "The hallway behind your room. Find the 5 keys hidden in the boxes to open the other door. Boosts turn up a little more often here!",
                          game.sideLevelRequirements)
@@ -149,6 +149,9 @@ struct SideLevelsView: View {
                     card(3, "Uncle's Car", "car.fill",
                          "Hop into Uncle's car behind the hotel and ride to the city where Auntie lives. She knows where Grandpa is. Still in the car after 10 minutes? You'll see a little of Level 6.",
                          game.carRequirements)
+                    card(4, "The Cinema", "popcorn.fill",
+                         "Pick a seat and watch a show. There are 10, each one hour long, and your place is kept if you leave. Every show you watch to the end pays 1000 orbs.",
+                         [])
                 }
                 Spacer()
             }
@@ -158,7 +161,7 @@ struct SideLevelsView: View {
 
     private func card(_ id: Int, _ name: String, _ symbol: String, _ about: String, _ needs: [(text: String, met: Bool)]) -> some View {
         let open = needs.allSatisfy(\.met)
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 12) {
                 Image(systemName: open ? symbol : "lock.fill")
                 Text("\(id) · \(name)")
@@ -185,7 +188,7 @@ struct SideLevelsView: View {
             }
             if open {
                 BigButton(title: "Play", symbol: "play.fill") { onPlay(id) }
-                    .padding(.top, 8)
+                    .scaleEffect(0.8, anchor: .leading)
             } else {
                 Text("Locked: finish the list above.")
                     .font(.game(20))
@@ -193,8 +196,8 @@ struct SideLevelsView: View {
                     .padding(.top, 8)
             }
         }
-        .padding(20)
-        .frame(width: 356, alignment: .leading)
+        .padding(18)
+        .frame(width: 548, alignment: .leading)
         .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 28))
     }
 }
@@ -779,6 +782,11 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("The cinema", [
+            "New side level: The Cinema. Pick one of 10 shows and pick your seat.",
+            "Every show is one hour long. If you leave, your place is kept for next time.",
+            "Each time you watch a show to the end you get 1000 orbs.",
+        ]),
         ("Biggest update", [
             "Five difficulty modes: Easy, Mild, Hard, Chaos and No Mercy. Pick one under the Play button. Mild is the game as it was.",
             "Easy: slower hazards, a longer clock, quieter steps, you're faster, 3-number codes, fewer dogs and keys, and Mom can't check hiding places.",
