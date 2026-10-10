@@ -36,6 +36,8 @@ final class Settings {
         default: return .night
         }
     }
+    /// The difficulty mode (a `Difficulty` raw value; 1 = Mild).
+    var difficulty: Int { didSet { save() } }
     /// 0 = small, 1 = normal, 2 = big joystick and buttons.
     var controlSize: Int { didSet { save() } }
     /// Joystick on the right and buttons on the left.
@@ -58,6 +60,7 @@ final class Settings {
         skyMode = d.object(forKey: "set.skyMode") == nil ? (flag("set.dawn", false) ? 1 : 0) : d.integer(forKey: "set.skyMode")
         timeZoneID = d.string(forKey: "set.timeZone") ?? TimeZone.current.identifier
         practice = flag("set.practice", false)
+        difficulty = d.object(forKey: "set.difficulty") == nil ? 1 : d.integer(forKey: "set.difficulty")
         controlSize = d.object(forKey: "set.controlSize") == nil ? 1 : d.integer(forKey: "set.controlSize")
         swapSides = flag("set.swapSides", false)
         haptics = flag("set.haptics", true)
@@ -73,6 +76,7 @@ final class Settings {
         d.set(skyMode, forKey: "set.skyMode")
         d.set(timeZoneID, forKey: "set.timeZone")
         d.set(practice, forKey: "set.practice")
+        d.set(difficulty, forKey: "set.difficulty")
         d.set(controlSize, forKey: "set.controlSize")
         d.set(swapSides, forKey: "set.swapSides")
         d.set(haptics, forKey: "set.haptics")

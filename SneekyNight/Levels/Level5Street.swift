@@ -49,6 +49,8 @@ final class StreetModel {
     var currentFloor = 1
     /// Where Uncle's room is this time: a random floor (2–11) and one of the corridor's doors.
     var uncleFloor = 2
+    /// Workers who have already walked past your hiding place this time (Chaos and above: they may look).
+    @ObservationIgnored private var checkedBy: Set<Int> = []
     var uncleDoorIndex = 0
     var snacks = 0
     var fed = 0
@@ -87,12 +89,15 @@ final class StreetModel {
     static let corridorWidth: CGFloat = 2000
     static let officeWidth: CGFloat = 1000
     /// The elevator's 10 buttons: floors 2 to 11. Floor 1 is the lobby.
-    static let floors = Array(2...11)
+    /// Hard and above: 20 floors (2 to 21).
+    static var floors: [Int] { Array(2...(Difficulty.current.atLeastHard ? 21 : 11)) }
     static let roomDoors: [CGFloat] = [520, 880, 1240, 1600]
     /// Uncle's room number, e.g. 703.
     var uncleRoom: Int { uncleFloor * 100 + uncleDoorIndex + 1 }
-    static let dogCount = 15
-    static let snackLoad = 5
+    /// Dogs to feed: 8 on Easy, 15 on Mild, 50 on Hard and above.
+    static var dogCount: Int { Difficulty.current.pick(easy: 8, mild: 15, hard: 50) }
+    /// With 50 dogs to feed you can carry more at once.
+    static var snackLoad: Int { Difficulty.current.atLeastHard ? 10 : 5 }
     static let stove: CGFloat = 620
     static let sink: CGFloat = 980
 
@@ -154,7 +159,7 @@ final class StreetModel {
         area = .street
         engine.load(SceneLayout(width: Self.streetWidth, floor: Self.floor, things: Self.streetThings(), spawn: CGPoint(x: 260, y: 620)))
         engine.usesHP = true
-        engine.timeLeft = Levels.all[4].seconds
+        engine.timeLeft = Levels.time(5)
         engine.timerOn = true
         engine.resetNoise()
         engine.noiseFactor = 1
@@ -208,8 +213,11 @@ final class StreetModel {
             H.onWall("hotelDoor", "hotelDoor", x: 5290, prompt: "Sneak into the hotel", reach: 90),
         ]
         // Fifteen dogs spread along the street, near and far from the wall.
-        for i in 0..<dogCount {
-            let x = 520 + CGFloat(i) * 245
+        let count = dogCount
+        // They share the same stretch of street, so with 50 they stand close together.
+        let gap = min(245, 3430 / CGFloat(max(count - 1, 1)))
+        for i in 0..<count {
+            let x = 520 + CGFloat(i) * gap
             let y: CGFloat = [585, 660, 610, 680, 570][i % 5]
             things.append(Thing(id: "dog\(i + 1)", kind: "dog", pos: CGPoint(x: x, y: y), footprint: CGSize(width: 70, height: 22),
                                 prompt: "Feed the dog", reach: CGSize(width: 80, height: 60)))
@@ -505,11 +513,18 @@ final class StreetModel {
     /// Everyone walks their beat; strangers hurt on contact, guards and workers send you back if they see you.
     private func walk(_ dt: Double) {
         let player = engine.player
+        let mode = Difficulty.current
         for i in walkers.indices where walkers[i].kind != .rat {
             if walkers[i].wait > 0 {
                 walkers[i].wait -= dt
             } else {
-                walkers[i].pos.x += walkers[i].speed * CGFloat(dt)
+                walkers[i].pos.x += walkers[i].speed * CGFloat(dt) * mode.hazardSpeed
+                // No Mercy: strangers don't just stroll past any more. Close by, they turn and come for you.
+                if mode == .noMercy, walkers[i].kind == .stranger, !engine.hidden {
+                    let toYou = player.x - walkers[i].pos.x
+                    if abs(toYou) < 520, abs(toYou) > 20, (toYou > 0) != (walkers[i].speed > 0) { walkers[i].speed = -walkers[i].speed }
+                    walkers[i].pos.y += min(max(player.y - walkers[i].pos.y, -60 * CGFloat(dt)), 60 * CGFloat(dt))
+                }
                 let range = walkers[i].range
                 if walkers[i].pos.x >= range.upperBound || walkers[i].pos.x <= range.lowerBound {
                     walkers[i].pos.x = min(max(walkers[i].pos.x, range.lowerBound), range.upperBound)
@@ -530,6 +545,21 @@ final class StreetModel {
                 // They see what's in front of them. Crouching, you can creep up much closer.
                 let reach: CGFloat = engine.ducking ? 110 : 290
                 let ahead = dx * (w.facingRight ? 1 : -1)
+                // Chaos and No Mercy: a worker walking right past your hiding place sometimes looks behind it.
+                if mode.atLeastChaos, w.kind == .worker, engine.hidden, abs(dx) < 40 {
+                    if !checkedBy.contains(w.id) {
+                        checkedBy.insert(w.id)
+                        if Int.random(in: 0..<3) == 0 {
+                            engine.hidden = false
+                            hidingIn = nil
+                            let before = area
+                            spotted(by: .worker)
+                            if area != before { return }
+                        }
+                    }
+                    continue
+                }
+                if abs(dx) > 120 { checkedBy.remove(w.id) }
                 guard ahead > 0, ahead < reach, abs(dy) < 85, !engine.concealed, engine.z < 60 else { continue }
                 // Being spotted can send you to another floor (and swap who's walking about): stop here if it did.
                 let before = area
@@ -979,16 +1009,17 @@ struct ElevatorPanel: View {
                 Text("Which floor? You're on \(current == 1 ? "the lobby" : "floor \(current)").")
                     .font(.game(18, .semibold))
                     .foregroundStyle(.white.opacity(0.75))
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(78), spacing: 14), count: 4), spacing: 14) {
+                let many = StreetModel.floors.count > 10
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(many ? 64 : 78), spacing: many ? 10 : 14), count: many ? 6 : 4), spacing: many ? 10 : 14) {
                     ForEach([1] + StreetModel.floors, id: \.self) { floor in
                         Button {
                             SoundPlayer.shared.tap()
                             onPick(floor)
                         } label: {
                             Text(floor == 1 ? "L" : "\(floor)")
-                                .font(.game(30, .heavy))
+                                .font(.game(many ? 24 : 30, .heavy))
                                 .foregroundStyle(floor == current ? .black : .white)
-                                .frame(width: 78, height: 78)
+                                .frame(width: many ? 64 : 78, height: many ? 64 : 78)
                                 .background(floor == current ? AnyShapeStyle(Color.orange) : AnyShapeStyle(Color(white: 0.3).gradient), in: Circle())
                                 .overlay(Circle().stroke(.white.opacity(0.5), lineWidth: 3))
                         }
@@ -997,7 +1028,7 @@ struct ElevatorPanel: View {
                 }
             }
             .padding(28)
-            .frame(width: 440)
+            .frame(width: StreetModel.floors.count > 10 ? 500 : 440)
             .background(LinearGradient(colors: [Color(white: 0.22), Color(white: 0.12)], startPoint: .top, endPoint: .bottom),
                         in: RoundedRectangle(cornerRadius: 30))
             .overlay(RoundedRectangle(cornerRadius: 30).stroke(.orange.opacity(0.7), lineWidth: 4))
@@ -1005,19 +1036,79 @@ struct ElevatorPanel: View {
     }
 }
 
-/// What the Guide says in practice mode, level by level.
+/// What the Guide says in practice mode, level by level: full step-by-step instructions,
+/// each one saying where to go and which button to press.
+@MainActor
 enum GuideTips {
-    static let level1 = ["Look under the table for a key.", "The lockbox is under the bed. Crouch to reach it.", "The lockbox key opens the door."]
-    static let level2 = ["Open the window: there's a key on the ledge.", "The second key is by your brother's bed, or in Mom's jewelry box.",
-                         "The door code is on a paper in one of the boxes.", "Closets are good hiding places."]
-    static let level3 = ["Jump the loose planks on the stairs.", "Throw food out of the window to call the dog.",
-                         "Find 3 metal scraps, and make keys at the garage workbench.", "Mom's phone has the basement code. Her passcode is 12345."]
-    static let level4 = ["Walk close to every plant to water it.", "When Dad is coming, hide in a bush.", "Jump over the spiky vines.",
-                         "Leave through the gate only while the dogs are away."]
-    static let level5 = ["Strangers hurt! Jump over them or wait in a bus stop.", "Snacks are in the fridge at home: go back through the HOME door.",
-                         "Mom can't see you while she cooks. Crouch under a table when she walks.", "A rat takes one snack, but leaves you a present.",
-                         "Crouch to creep up behind the hotel guards.", "The blue key from the dog opens Uncle's door."]
-    static let otherHallway = ["Five of the eight boxes hide a key.", "Search boxes again for accessories and boosts.", "With 5 keys, the far door opens."]
-    static let dungeon = ["Press E at a glowing rock to mine an orb.", "Spend orbs at the Orb Shop.", "The quest board tells you what to do to finish.",
-                          "Jump over the sliding spikes."]
+    static var level1: [String] { [
+        "Step 1: walk to the small table and press the hand button (E). A key is hiding under it.",
+        "Step 2: go to the bed. Press the crouch button (C), then E, to pull out the lockbox and open it with that key.",
+        "Step 3: the lockbox had the door key in it. Walk to the door and press E. Done!",
+        "If you make too much noise, Mom comes in. Don't press the taunt button (T) too often.",
+    ] }
+    static var level2: [String] { [
+        "Step 1: the window. Press E to open it, then E again to take the key from the ledge.",
+        "Step 2: a second key. Either the drawer next to your brother's bed (jump over his toys with Space), or Mom's jewelry box in her room.",
+        "Step 3: the door code is on a paper in one of the four boxes. Press E at each box until you find it.",
+        "Step 4: walk to the front door at the far right end, press E and type the code. With 2 keys it opens.",
+        "Don't walk into chairs, tables or lamps. Crouch (C) to touch them safely, or jump over them.",
+        "If Mom or Dad comes, press E at a closet to hide inside.",
+    ] }
+    static var level3: [String] { [
+        "Step 1: go down the stairs. Jump (Space) over every loose plank; crouching does NOT help here.",
+        "Step 2: take food from the fridge, go to the window and throw it out. A dog comes to the front door. Bring him one more snack and he gives you a key.",
+        "Step 3: find 3 metal scraps (press E at shelves, bins and boxes). Take each one to the workbench in the garage to make a key, then open the 3 lockboxes.",
+        "Step 4: flick the garage light switch 3 times. Dad comes down to look. Hide in a closet until he is inside the garage.",
+        "Step 5: upstairs, take a toy from your brother's room, throw it in the hallway and hide. While Mom looks at it, take her phone. Passcode: \(DownstairsModel.passcode). Notes has the basement code: \(DownstairsModel.exitCode).",
+        "Step 6: go to the basement, keep away from Dad, and type \(DownstairsModel.exitCode) at the exit door.",
+        "Step 7: outside, lock the door with the dog's key within 10 seconds, then walk to the garden gate.",
+    ] }
+    static var level4: [String] { [
+        "Step 1: water all the plants. You don't press anything: just walk close to each one.",
+        "The radar station (press E) shows which plants are still thirsty.",
+        "When the banner says Dad is coming, find a bush and press E to hide in it until he leaves.",
+        "Spiky vines across a path: jump over them with Space. Touching one brings Dad.",
+        "Pests: walk up to one and press E to shoo it away.",
+        "Step 2: when every plant is watered, go to the gate. Only walk through while the two dogs are away.",
+        "Step 3: beyond the gate, search the spots for \(GardenModel.keysNeeded) keys, then type the code at the street gate. The hint is at the bottom of the screen.",
+    ] }
+    static var level5: [String] { [
+        "You have a health bar here. Strangers take health if they touch you: jump over them, or press E at a bus stop to wait inside.",
+        "Step 1: go through the HOME door at the start of the street to get snacks from the fridge (\(StreetModel.snackLoad) at a time).",
+        "In the kitchen, Mom can't see you while she stands cooking. When she walks, crouch (C) under a table.",
+        "Step 2: back on the street, press E at each dog to feed it. There are \(StreetModel.dogCount) dogs.",
+        "A rat takes one snack but leaves you a present. Jump over it if you want to keep the snack.",
+        "Step 3: the hotel is at the far right. Crouch to creep up behind the guards; they only see in front of them.",
+        "Step 4: inside, hide behind plants when a worker looks your way. Take the elevator and find Uncle's room.",
+        "Step 5: the blue key in your backpack opens Uncle's door. Go in and press E to talk to him.",
+    ] }
+    static var level6: [String] { [
+        "Auntie wants \(AuntieModel.choreCount) chores done. The list is at the bottom of the screen; the next one is in yellow.",
+        "Walk to the thing for a chore and press E. Some chores need a few presses, or more than one place.",
+        "For the rubbish: stand next to the bag, press the box button (R) to pick it up, carry it to the bin, and press E at the bin.",
+        "The cats are asleep on the floor. Jump over them (Space) or crouch past (C). If you step on one, you lose time.",
+        "Auntie's glasses are hidden in one of the drawers or boxes. Press E at each until you find them.",
+        "When every chore is ticked, Auntie walks to the back door. Follow her and press E at the door.",
+    ] }
+    static var otherHallway: [String] { [
+        "Five of the eight boxes hide a key. Walk to each box and press E.",
+        "You can search a box again and again for accessories and boosts.",
+        "With all 5 keys, walk to the door at the far right end and press E.",
+    ] }
+    static var dungeon: [String] { [
+        "Stand next to a glowing rock and press E to mine an orb. Each rock has 3, and they grow back.",
+        "Spend orbs at the Orb Shop near the entrance (press E at the stall).",
+        "The quest board next to the shop tells you what to do to finish this side level.",
+        "Jump (Space) over the sliding spikes. They take health.",
+    ] }
+
+    /// No Mercy: things the Guide says when he gets it wrong.
+    static let mistakes = [
+        "The key is... under the fridge? No. Wait. Forget I said that.",
+        "Go left! ...No, sorry, my left. Your right. I think.",
+        "Taunting makes you invisible. (It doesn't. I made that up.)",
+        "The code is 0000. It's always 0000. (It is never 0000.)",
+        "Mom is definitely asleep. Probably. Maybe go check?",
+        "This box is safe. I'm almost fairly nearly sure.",
+    ]
 }

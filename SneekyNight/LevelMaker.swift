@@ -68,6 +68,9 @@ struct CustomKind: Identifiable {
         CustomKind(id: "car", name: "Toy car", symbol: "car.fill", group: .hazard, onWall: false),
         CustomKind(id: "spikes", name: "Spikes", symbol: "triangle.fill", group: .hazard, onWall: false),
         CustomKind(id: "stranger", name: "Stranger", symbol: "figure.walk", group: .hazard, onWall: false),
+        // Instant-fail hazards: one touch and the level is over.
+        CustomKind(id: "lava", name: "Lava (instant)", symbol: "flame.fill", group: .hazard, onWall: false),
+        CustomKind(id: "laser", name: "Laser (instant)", symbol: "bolt.horizontal.fill", group: .hazard, onWall: true),
         CustomKind(id: "mom", name: "Mom", symbol: "figure.dress.line.vertical.figure", group: .character, onWall: true, single: true),
         CustomKind(id: "dad", name: "Dad", symbol: "mustache.fill", group: .character, onWall: false, single: true),
         CustomKind(id: "brother", name: "Brother", symbol: "figure.child", group: .character, onWall: false, single: true),
@@ -161,6 +164,8 @@ struct CustomItemArt: View {
         case "car": ToyCarView(facingRight: true)
         case "spikes": SpikeTrapView()
         case "stranger": PersonView(outfit: .stranger(1))
+        case "lava": LavaPoolView()
+        case "laser": LaserBeamView(on: !open).offset(y: 150)
         case "mom": MomView(stunned: false, walking: false)
         case "dad": DadView(stunned: false, walking: false, laughing: false)
         case "brother": CharacterView(look: SiblingBuddy.look, facingRight: false).scaleEffect(0.78, anchor: .bottom)
@@ -613,6 +618,10 @@ final class CustomLevelModel {
     var doorOpen = false
     var over = false
     var strangers: [Walker] = []
+    /// Where the laser beams are, and whether they're switched on right now (they blink).
+    var lasers: [CGFloat] = []
+    var lasersOn = true
+    @ObservationIgnored private var laserClock = 0.0
     var dadX: CGFloat = 0
     var dadRight = true
     var dadHere = false
@@ -700,6 +709,9 @@ final class CustomLevelModel {
         var things: [Thing] = []
         keyBoxes = []
         strangers = []
+        lasers = []
+        lasersOn = true
+        laserClock = 0
         watchers = []
         watcherLines = [:]
         for (n, item) in level.items.enumerated() {
@@ -731,6 +743,9 @@ final class CustomLevelModel {
                 car.patrol = max(60, pos.x - 220)...min(level.width - 60, pos.x + 220)
                 car.speed = 220
                 things.append(car)
+            case "lava":
+                things.append(Thing(id: id, kind: "lava", pos: pos, footprint: CGSize(width: 120, height: 40), flat: true))
+            case "laser": lasers.append(pos.x)
             case "spikes", "stranger":
                 strangers.append(Walker(id: n, kind: item.kind == "spikes" ? .rat : .stranger, pos: pos,
                                         range: max(60, pos.x - 240)...min(level.width - 60, pos.x + 240),
@@ -849,8 +864,22 @@ final class CustomLevelModel {
         let prompt: String? = near.map { $0.kind == "brother" ? "Talk to your brother" : "Talk to \(CustomKind.find($0.kind).name)" }
         if engine.defaultPrompt != prompt { engine.defaultPrompt = prompt }
         walkWatchers(dt)
+        // Instant-fail hazards. Lava: jump over it. Lasers: they blink, so walk through while they're off.
+        laserClock += dt
+        let on = laserClock.truncatingRemainder(dividingBy: 3) < 1.7
+        if on != lasersOn { lasersOn = on }
+        if !engine.safe && !engine.godMode && !engine.hidden {
+            if engine.z < 14, engine.things.contains(where: { $0.kind == "lava" && $0.covers(player, pad: CGSize(width: -8, height: -4)) }) {
+                end("Melted!", "You stepped in the lava. One touch is all it takes!")
+                return
+            }
+            if lasersOn, lasers.contains(where: { abs($0 - player.x) < 24 }) {
+                end("Zapped!", "You walked into a laser beam. Wait until it blinks off!")
+                return
+            }
+        }
         for i in strangers.indices {
-            strangers[i].pos.x += strangers[i].speed * CGFloat(dt)
+            strangers[i].pos.x += strangers[i].speed * CGFloat(dt) * Difficulty.current.hazardSpeed
             if strangers[i].pos.x >= strangers[i].range.upperBound || strangers[i].pos.x <= strangers[i].range.lowerBound {
                 strangers[i].pos.x = min(max(strangers[i].pos.x, strangers[i].range.lowerBound), strangers[i].range.upperBound)
                 strangers[i].speed = -strangers[i].speed
@@ -1037,6 +1066,9 @@ private struct CustomLevelStage: View {
             if let talk = model.talkLine {
                 SpeechBubble(text: talk.text, tint: .green, small: true).position(x: talk.spot.x, y: talk.spot.y - 200)
             }
+            ForEach(model.lasers, id: \.self) { x in
+                LaserBeamView(on: model.lasersOn).anchored(at: CGPoint(x: x, y: 700))
+            }
             ForEach(model.strangers) { walker in
                 Group {
                     if walker.kind == .rat { SpikeTrapView() } else { PersonView(outfit: .stranger(walker.style), walking: true) }
@@ -1051,5 +1083,34 @@ private struct CustomLevelStage: View {
             Palette.shade.opacity(0.2 * Palette.shadeAmount)
         }
         .frame(width: CGFloat(model.level.width), height: 700, alignment: .topLeading)
+    }
+}
+
+/// A pool of lava for the Level Maker. Touching it ends the level at once.
+struct LavaPoolView: View {
+    var body: some View {
+        ZStack {
+            Ellipse().fill(Color(red: 0.55, green: 0.10, blue: 0.05)).frame(width: 130, height: 44)
+            Ellipse().fill(LinearGradient(colors: [.yellow, .orange, .red], startPoint: .top, endPoint: .bottom)).frame(width: 116, height: 34)
+            Circle().fill(.yellow.opacity(0.9)).frame(width: 12).offset(x: -26, y: -4)
+            Circle().fill(.yellow.opacity(0.8)).frame(width: 8).offset(x: 22, y: 3)
+        }
+        .shadow(color: .orange, radius: 12)
+        .frame(width: 130, height: 46)
+    }
+}
+
+/// A laser from ceiling to floor for the Level Maker. It blinks; touching it while it's on ends the level.
+struct LaserBeamView: View {
+    let on: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Rectangle().fill(Color.red.opacity(on ? 0.9 : 0.12)).frame(width: 8, height: 560)
+                .shadow(color: .red, radius: on ? 14 : 0)
+            RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.25)).frame(width: 34, height: 16)
+            RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.25)).frame(width: 34, height: 16).offset(y: -556)
+        }
+        .frame(width: 40, height: 580, alignment: .bottom)
     }
 }

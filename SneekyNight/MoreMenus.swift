@@ -779,6 +779,19 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Biggest update", [
+            "Five difficulty modes: Easy, Mild, Hard, Chaos and No Mercy. Pick one under the Play button. Mild is the game as it was.",
+            "Easy: slower hazards, a longer clock, quieter steps, you're faster, 3-number codes, fewer dogs and keys, and Mom can't check hiding places.",
+            "Hard: faster hazards that hurt more, a shorter clock, 50 dogs and 20 hotel floors.",
+            "Chaos: Mom and Dad are as fast as you, hiding never works, and hotel workers check hiding places.",
+            "No Mercy: a very short clock, Mom outruns you, boxes can be traps, strangers come after you, and the Guide gets things wrong.",
+            "Harder modes find boosts more often and get more orbs in the dungeon.",
+            "Level 6: Auntie's House. Do Auntie's 10 chores, then follow her to the backyard door. Mind the cats!",
+            "20 hair styles, hair colours, and \"My own\": make your own haircut with six sliders.",
+            "The Guide explains every step and which button to press, and walks at your speed.",
+            "Press dash again in the middle of a dash to stop it.",
+            "Level Maker: two instant-fail hazards, lava and a blinking laser.",
+        ]),
         ("Uncle's car and cool things", [
             "New side level: Uncle's car. Hop in behind the hotel and ride to Auntie's city. Stay for the whole 10 minutes and you'll see scenes from Level 6: Auntie's House.",
             "Have a real conversation with your brother: pick \"Let's talk\" and choose what to talk about.",

@@ -82,7 +82,7 @@ final class OtherHallwayModel {
         keyBoxes = Set(things.filter { $0.kind == "box" }.map(\.id).shuffled().prefix(Self.keyCount))
         room = .hallway
         engine.load(SceneLayout(width: Self.hallWidth, floor: Self.floor, things: things, spawn: CGPoint(x: 220, y: 610)))
-        engine.timeLeft = Self.seconds
+        engine.timeLeft = (Self.seconds * Difficulty.current.timeScale).rounded()
         engine.timerOn = true
         engine.resetNoise()
         engine.noiseFactor = 1

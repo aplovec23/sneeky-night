@@ -5,7 +5,7 @@ import QuartzCore
 
 /// Something you bump into on the floor that makes a noise and wakes Mom.
 enum Hazard {
-    case chair, table, lamp, toy, shoes, basket, plank, cans, vines
+    case chair, table, lamp, toy, shoes, basket, plank, cans, vines, cat
 
     var sound: Sound {
         switch self {
@@ -18,6 +18,7 @@ enum Hazard {
         case .plank: .creak
         case .cans: .lamp
         case .vines: .ouch
+        case .cat: .squeak
         }
     }
 
@@ -32,6 +33,7 @@ enum Hazard {
         case .plank: "A loose plank creaked. CREEEAK!"
         case .cans: "You kicked the paint cans. CLANG!"
         case .vines: "OUCH! The spiky vines got you, and you yelped!"
+        case .cat: "You stepped on a cat's tail. MEOWWW!"
         }
     }
 }
@@ -212,6 +214,12 @@ final class GameEngine {
     /// Esc or P on a keyboard.
     @ObservationIgnored var onPause: () -> Void = {}
     @ObservationIgnored private var hurtTime = 0.0
+    /// Things already touched once on No Mercy (so each can only be a trap the first time).
+    @ObservationIgnored private var testedItems: Set<String> = []
+    /// How fast you'd be walking right now without crouching or running (boosts and difficulty included).
+    private(set) var walkSpeed: CGFloat = 290
+    /// How fast you can go right now: walking speed, or running speed while you sprint.
+    var pace: CGFloat { walkSpeed * (sprinting ? 1.5 : 1) }
     /// Counts room changes, so player 2's "use" can tell when it walked everyone through a door.
     @ObservationIgnored private var loads = 0
 
@@ -261,6 +269,7 @@ final class GameEngine {
         placePlayer2()
         guidePos = nil
         guideArrived = false
+        testedItems = []
     }
 
     /// Puts player 2 next to player 1 (or takes them away when multiplayer is off).
@@ -281,7 +290,7 @@ final class GameEngine {
     /// you were just hurt, you're in practice mode, or this level has no health bar.
     @discardableResult func damage(_ amount: Double) -> Bool {
         guard usesHP, running, hurtTime <= 0, !godMode, !safe, !hidden else { return false }
-        hp = max(0, hp - amount)
+        hp = max(0, hp - amount * Difficulty.current.damageScale)
         hurtTime = 1.3
         hurt = true
         Sound.ouch.play()
@@ -338,10 +347,27 @@ final class GameEngine {
     func interact() {
         guard running, !frozen else { return }
         if let nearest {
+            if springsTrap(nearest) { return }
             onInteract(nearest)
         } else if defaultPrompt != nil && !hidden {
             onDefaultInteract()
         }
+    }
+
+    /// No Mercy: the first time you touch a box, drawer or rock, it's 50-50 whether it was a trap.
+    /// A trap snaps shut: a lot of noise, and it hurts in levels with health. After that it's safe.
+    private func springsTrap(_ i: Int) -> Bool {
+        guard Difficulty.current == .noMercy, !safe, i < things.count,
+              ["box", "dresser", "nightstand", "rock", "crate", "trunk", "toolbox"].contains(things[i].kind),
+              !testedItems.contains(things[i].id) else { return false }
+        testedItems.insert(things[i].id)
+        guard Bool.random() else { return false }
+        Sound.buzz.play()
+        Sound.ouch.play()
+        say("OW! It was a trap!", seconds: 1.8)
+        addNoise(45)
+        damage(15)
+        return true
     }
 
     func jump() {
@@ -350,7 +376,7 @@ final class GameEngine {
             ducking = false
             return
         }
-        vz = (jumpBoost ? 820 : 640) * jumpMult.squareRoot()
+        vz = (jumpBoost ? 820 : 640) * jumpMult.squareRoot() * Difficulty.current.playerJump
         Sound.jump.play(volume: 0.6)
     }
 
@@ -367,11 +393,16 @@ final class GameEngine {
         tauntTime = 0.9
         Sound.taunt.play(volume: 0.8)
         say(["Nyeh nyeh!", "Can't catch me!", "Hee hee hee!", "Ninja mode!", "Too sneaky for you!"].randomElement()!, seconds: 1.4)
-        addNoise(34)
+        addNoise(Difficulty.current.tauntNoise, plain: true)
         onTaunt()
     }
 
     func dash() {
+        // Pressing dash again in the middle of a dash stops it right there.
+        if dashTime > 0 {
+            dashTime = 0
+            return
+        }
         guard running, !frozen, canDash, !hidden, dashCooldown <= 0 else { return }
         ducking = false
         // Dash the way you're steering; if you're not steering, the way you're facing.
@@ -382,9 +413,10 @@ final class GameEngine {
         Sound.dash.play()
     }
 
-    func addNoise(_ amount: Double) {
+    /// `plain`: the amount is already set for the difficulty (taunts), so Easy's quieter steps don't apply again.
+    func addNoise(_ amount: Double, plain: Bool = false) {
         guard !noiseMuted else { return }
-        noise = min(100, noise + amount * noiseFactor / noiseDiv)
+        noise = min(100, noise + amount * noiseFactor / noiseDiv / (plain ? 1 : Difficulty.current.quiet))
     }
 
     func moveObject() {
@@ -587,7 +619,8 @@ final class GameEngine {
 
         // Boosts stack, but anything past 1100 is too fast to steer (creative mode and the Guide's Hat go further).
         let cap: CGFloat = creative || phasing ? 3200 : 1100
-        var speed: CGFloat = min(cap, (speedBoost ? 440 : 290) * (1 + speedBonus) * speedMult)
+        var speed: CGFloat = min(cap, (speedBoost ? 440 : 290) * (1 + speedBonus) * speedMult * Difficulty.current.playerSpeed)
+        if speed != walkSpeed { walkSpeed = speed }
         if ducking { speed *= 0.5 } else if run { speed *= 1.5 }
         if dashTime > 0 {
             v = dashDirection
@@ -642,7 +675,7 @@ final class GameEngine {
         }
         for i in things.indices {
             guard let range = things[i].patrol, !things[i].hidden else { continue }
-            things[i].pos.x += things[i].speed * dt
+            things[i].pos.x += things[i].speed * dt * Difficulty.current.hazardSpeed
             if things[i].pos.x > range.upperBound {
                 things[i].pos.x = range.upperBound
                 things[i].speed = -abs(things[i].speed)
@@ -721,18 +754,18 @@ final class GameEngine {
             if fromPlayer > 360 {
                 // You fell behind: he comes back for you.
                 target = CGPoint(x: player.x + (goalSpot.x > player.x ? 90 : -90), y: player.y)
-                if guideSpeech == nil { guideSay(["Follow me!", "This way!", "Come on, over here!"].randomElement()!) }
+                if guideSpeech == nil { guideSay(["I'll wait for you. Walk toward me!", "This way! I won't go faster than you.", "Over here! Follow my lantern."].randomElement()!) }
             } else if toGoal > 40 {
                 // Stay a little ahead of you on the way there.
                 let dir: CGFloat = goalSpot.x >= player.x ? 1 : -1
                 let ahead = CGPoint(x: player.x + dir * 170, y: goalSpot.y)
                 target = abs(goalSpot.x - player.x) < 170 ? goalSpot : ahead
-                if !guideArrived && guideSpeech == nil && Int.random(in: 0..<240) == 0 { guideSay("Follow me!") }
+                if !guideArrived && guideSpeech == nil && Int.random(in: 0..<240) == 0 { guideSay("Follow me to the next thing to do!") }
             } else {
                 target = goalSpot
             }
             let arrived = toGoal < 50 && fromPlayer < 140
-            if arrived && !guideArrived { guideSay("Here! This is the place.") }
+            if arrived && !guideArrived { guideSay("Here! Stand next to it and press the hand button (E).") }
             guideArrived = arrived
         } else {
             target = CGPoint(x: player.x - (facingRight ? 110 : -110), y: player.y)
@@ -745,7 +778,9 @@ final class GameEngine {
         let distance = hypot(dx, dy)
         let moving = distance > 12
         if moving {
-            let step = min(distance, 330 * CGFloat(dt))
+            // He walks at your speed (crouching or running too), a touch faster only to get back in front.
+            let yours = max(120, walkSpeed * (ducking ? 0.5 : sprinting ? 1.5 : 1))
+            let step = min(distance, yours * (distance > 150 ? 1.12 : 1) * CGFloat(dt))
             pos.x += dx / distance * step
             pos.y += dy / distance * step
             if abs(dx) > 4, (dx > 0) != guideFacingRight { guideFacingRight = dx > 0 }

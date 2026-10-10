@@ -63,7 +63,8 @@ final class HallwayModel {
     @ObservationIgnored private var run = 0
     @ObservationIgnored private var dadRun = 0
 
-    static let codes = ["1DLP", "9PO8", "42FOJ"]
+    /// On Easy the door code is just three numbers.
+    static var codes: [String] { Difficulty.current == .easy ? ["472", "915", "638"] : ["1DLP", "9PO8", "42FOJ"] }
     static let floor: ClosedRange<CGFloat> = 545...690
     static let hallWidth: CGFloat = 3400
     static let roomWidth: CGFloat = 1500
@@ -144,7 +145,7 @@ final class HallwayModel {
         saved = [.siblingRoom: Self.siblingRoomThings(), .momRoom: Self.momRoomThings()]
         room = .hallway
         engine.load(SceneLayout(width: Self.hallWidth, floor: Self.floor, things: Self.hallThings(), spawn: CGPoint(x: 220, y: 610)))
-        engine.timeLeft = Levels.all[1].seconds
+        engine.timeLeft = Levels.time(2)
         engine.timerOn = true
         engine.resetNoise()
         engine.noiseFactor = 1

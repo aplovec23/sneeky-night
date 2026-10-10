@@ -57,8 +57,12 @@ final class GardenModel {
     @ObservationIgnored private var waterSound = 0.0
 
     static let plantCount = 100
-    static let code = "Plants"
-    static let codeHint = "The code hint is a green object that can grow"
+    /// On Easy the gate code is three numbers and there are only two keys to find.
+    static var code: String { Difficulty.current == .easy ? "357" : "Plants" }
+    static var codeHint: String {
+        Difficulty.current == .easy ? "The code is three numbers: 3, 5, 7" : "The code hint is a green object that can grow"
+    }
+    static var keysNeeded: Int { Difficulty.current == .easy ? 2 : 3 }
     static let columns = 10
     static let rows = 8
     static let cell = CGSize(width: 220, height: 170)
@@ -117,10 +121,10 @@ final class GardenModel {
         run += 1
         belt.reset()
         area = .maze
-        keySpots = Set(Self.searchSpots.shuffled().prefix(3))
+        keySpots = Set(Self.searchSpots.shuffled().prefix(Self.keysNeeded))
         engine.load(SceneLayout(width: Self.mazeSize.width, floor: Self.origin.y...(Self.origin.y + CGFloat(Self.rows) * Self.cell.height),
                                 things: Self.mazeThings(), spawn: Self.center(0, 0), height: Self.mazeSize.height))
-        engine.timeLeft = Levels.all[3].seconds
+        engine.timeLeft = Levels.time(4)
         engine.timerOn = true
         engine.resetNoise()
         engine.noiseFactor = 1
@@ -403,7 +407,7 @@ final class GardenModel {
             engine.load(SceneLayout(width: Self.beyondWidth, floor: HallwayModel.floor, things: Self.beyondThings(), spawn: CGPoint(x: 210, y: 610)))
             engine.timeLeft += 60
             banner = nil
-            engine.say("Made it! Now: 3 keys and a code for the street gate.", seconds: 4)
+            engine.say("Made it! Now: \(Self.keysNeeded) keys and a code for the street gate.", seconds: 4)
         }
     }
 
@@ -416,7 +420,7 @@ final class GardenModel {
         Sound.rustle.play()
         if keySpots.contains(engine.things[i].id) {
             Sound.key.play()
-            show(Popup(title: "You found a key!", message: "Key \(keys + 1) of 3 for the street gate.",
+            show(Popup(title: "You found a key!", message: "Key \(keys + 1) of \(Self.keysNeeded) for the street gate.",
                        symbol: "key.fill", color: Palette.gold, button: "Take Key") { [weak self] in
                 self?.keys += 1
                 self?.award(.patienceIsKey)
@@ -463,8 +467,8 @@ final class GardenModel {
     }
 
     private func tryKeys() {
-        guard keys >= 3 else {
-            engine.say("The code worked! But the gate has 3 locks. I have \(keys) of 3 keys.")
+        guard keys >= Self.keysNeeded else {
+            engine.say("The code worked! But the gate has \(Self.keysNeeded) locks. I have \(keys) of \(Self.keysNeeded) keys.")
             return
         }
         gateOpen = true
@@ -703,7 +707,7 @@ final class GardenModel {
             if watered < Self.plantCount { return engine.nearestSpot { $0.kind == "plant" && !$0.open } }
             return engine.nearestSpot { $0.kind == "pest" }
         }
-        if keys < 3, let spot = engine.things.first(where: { keySpots.contains($0.id) && !$0.open }) { return spot.pos }
+        if keys < Self.keysNeeded, let spot = engine.things.first(where: { keySpots.contains($0.id) && !$0.open }) { return spot.pos }
         return engine.spot("streetGate")
     }
 

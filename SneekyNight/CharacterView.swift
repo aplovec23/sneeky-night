@@ -37,7 +37,8 @@ struct CharacterView: View {
     private var pattern: String? { LookOptions.patterns[look.pattern % LookOptions.patterns.count] }
     private var cap: Color? { LookOptions.allCaps[look.cap % LookOptions.allCaps.count] }
     private var hair: Color {
-        look.gender == .boy ? Color(red: 0.33, green: 0.21, blue: 0.12) : Color(red: 0.55, green: 0.30, blue: 0.14)
+        if look.hairColor > 0, let picked = LookOptions.hairColors[look.hairColor % LookOptions.hairColors.count] { return picked }
+        return look.gender == .boy ? Color(red: 0.33, green: 0.21, blue: 0.12) : Color(red: 0.55, green: 0.30, blue: 0.14)
     }
 
     private func leg(_ angle: Double) -> some View {
@@ -149,11 +150,30 @@ struct CharacterView: View {
 }
 
 extension CharacterView {
-    private var style: Int { abs(look.hair) % LookOptions.hairStyles.count }
+    private var style: Int { look.hair == LookOptions.ownHaircut ? -1 : abs(look.hair) % LookOptions.hairStyles.count }
+    /// One of the six numbers of the haircut you made yourself.
+    private func own(_ part: Int) -> CGFloat { part < look.ownHair.count ? CGFloat(min(max(look.ownHair[part], 0), 1)) : 0 }
+
+    /// The usual hair on top of the head: a cap of hair and a fringe.
+    private var topHair: some View {
+        ZStack {
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            Capsule().fill(hair).frame(width: 30, height: 12).rotationEffect(.degrees(-12)).position(x: 60, y: 18)
+        }
+        .frame(width: 100, height: 160)
+    }
 
     /// Hair that hangs behind the head (drawn before the head, so it shows even under a cap).
     @ViewBuilder fileprivate var hairBehind: some View {
         switch style {
+        case -1:
+            // Your own haircut: the back and the sides.
+            if own(3) > 0.05 {
+                RoundedRectangle(cornerRadius: 22).fill(hair).frame(width: 62, height: 34 + own(3) * 80).position(x: 48, y: 36 + (34 + own(3) * 80) / 2 - 10)
+            }
+            if own(2) > 0.05 {
+                Capsule().fill(hair).frame(width: 16, height: 14 + own(2) * 56).position(x: 26, y: 36 + (14 + own(2) * 56) / 2)
+            }
         case 0:
             if look.gender == .girl {
                 RoundedRectangle(cornerRadius: 22).fill(hair).frame(width: 62, height: 66).position(x: 50, y: 50)
@@ -163,6 +183,23 @@ extension CharacterView {
             Capsule().fill(hair).frame(width: 18, height: 50).rotationEffect(.degrees(28)).position(x: 16, y: 50)
             Circle().fill(Color.pink).frame(width: 10).position(x: 24, y: 30)
         case 6: RoundedRectangle(cornerRadius: 16).fill(hair).frame(width: 66, height: 54).position(x: 50, y: 44)
+        case 8:
+            // Pigtails
+            Capsule().fill(hair).frame(width: 16, height: 46).rotationEffect(.degrees(24)).position(x: 14, y: 54)
+            Capsule().fill(hair).frame(width: 16, height: 46).rotationEffect(.degrees(10)).position(x: 30, y: 62)
+            Circle().fill(Color.pink).frame(width: 9).position(x: 21, y: 36)
+        case 9: Circle().fill(hair).frame(width: 88).position(x: 48, y: 28)
+        case 12:
+            // A long braid down the back
+            ForEach(0..<6, id: \.self) { i in
+                Circle().fill(hair).brightness(i % 2 == 0 ? 0 : -0.06).frame(width: 16 - CGFloat(i))
+                    .position(x: 22 - CGFloat(i) * 1.5, y: 44 + CGFloat(i) * 12)
+            }
+        case 18:
+            RoundedRectangle(cornerRadius: 26).fill(hair).frame(width: 68, height: 96).position(x: 47, y: 64)
+            ForEach(0..<4, id: \.self) { i in
+                Circle().fill(hair).frame(width: 22).position(x: 20 + CGFloat(i) * 18, y: 110)
+            }
         default: EmptyView()
         }
     }
@@ -170,6 +207,24 @@ extension CharacterView {
     /// Hair on top of the head (hidden by a cap).
     @ViewBuilder fileprivate var hairOnTop: some View {
         switch style {
+        case -1:
+            // Your own haircut: the top, the fringe, then spikes and curls.
+            let tall = 44 + own(0) * 44
+            Ellipse().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: tall).position(x: 50, y: 35)
+            if own(1) > 0.05 {
+                Capsule().fill(hair).frame(width: 32, height: 8 + own(1) * 20).rotationEffect(.degrees(-12)).position(x: 60, y: 16 + own(1) * 8)
+            }
+            let spikes = Int((own(4) * 7).rounded())
+            ForEach(0..<spikes, id: \.self) { i in
+                Triangle().fill(hair).frame(width: 14, height: 14 + own(4) * 14)
+                    .rotationEffect(.degrees((Double(i) - Double(spikes - 1) / 2) * 16))
+                    .position(x: 50 + (CGFloat(i) - CGFloat(spikes - 1) / 2) * 10, y: 36 - tall / 2 - 4 + abs(CGFloat(i) - CGFloat(spikes - 1) / 2) * 3)
+            }
+            let curls = Int((own(5) * 8).rounded())
+            ForEach(0..<curls, id: \.self) { i in
+                Circle().fill(hair).brightness(i % 2 == 0 ? 0.04 : -0.04).frame(width: 18)
+                    .position(x: 50 + (CGFloat(i) - CGFloat(curls - 1) / 2) * 8.5, y: 36 - tall / 2 + 4 + abs(CGFloat(i) - CGFloat(curls - 1) / 2) * 3.5)
+            }
         case 1:
             // Spiky
             Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 36)
@@ -202,10 +257,41 @@ extension CharacterView {
             Circle().trim(from: 0.56, to: 0.97).fill(hair).brightness(-0.08).frame(width: 55, height: 55).position(x: 50, y: 38)
             Capsule().fill(hair).frame(width: 44, height: 18).position(x: 50, y: 7)
             Capsule().fill(hair).brightness(0.08).frame(width: 30, height: 12).position(x: 54, y: 2)
-        default:
+        case 8: topHair
+        case 9:
+            // Afro: the big round shape is behind; this is the front of it.
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 66, height: 70).position(x: 50, y: 34)
+        case 10:
+            topHair
+            Circle().fill(hair).frame(width: 26).position(x: 46, y: 0)
+        case 11:
+            topHair
+            Circle().fill(hair).frame(width: 22).position(x: 30, y: 6)
+            Circle().fill(hair).frame(width: 22).position(x: 66, y: 4)
+        case 12: topHair
+        case 13:
+            // Bowl cut
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 62, height: 66).position(x: 50, y: 37)
+            RoundedRectangle(cornerRadius: 4).fill(hair).frame(width: 58, height: 11).position(x: 51, y: 32)
+        case 14:
             Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
-            Capsule().fill(hair).frame(width: 30, height: 12).rotationEffect(.degrees(-12)).position(x: 60, y: 18)
-            if look.gender == .girl {
+            Capsule().fill(hair).frame(width: 44, height: 15).rotationEffect(.degrees(-24)).position(x: 62, y: 20)
+        case 15:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            Ellipse().fill(hair).frame(width: 36, height: 26).rotationEffect(.degrees(-18)).position(x: 64, y: 9)
+        case 16:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            RoundedRectangle(cornerRadius: 3).fill(hair).frame(width: 52, height: 18).position(x: 50, y: 6)
+        case 17: EmptyView()
+        case 18: topHair
+        case 19:
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 58, height: 58).position(x: 50, y: 35)
+            ForEach(0..<4, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 2).fill(hair).frame(width: 8, height: 10 + CGFloat(i % 2) * 4).position(x: 50 + CGFloat(i) * 8, y: 30)
+            }
+        default:
+            topHair
+            if look.gender == .girl && style == 0 {
                 HStack(spacing: 2) {
                     Circle().fill(Color.pink).frame(width: 13)
                     Circle().fill(Color.pink).frame(width: 13)

@@ -19,6 +19,16 @@ In practice mode the Guide also walks in the room with you ("Follow me!") and le
 
 **Creative mode** (switch at the top of the Levels screen; needs every level, every side level and 33 badges): a wand button in each level opens the admin panel with 55 commands (`SneekyNight/Creative.swift`), and you wear the creative crown while it's on. Status commands stack (Speed ×2 pressed three times = ×8; the panel shows your current stats). Creative mode switches on immortality and the untouchable buff: when Mom or Dad try to grab you they get confused ("Why can't I touch you?!") and sometimes decide you're a ghost. In your own Level Maker levels, creative mode can be switched on in the editor even before it's unlocked.
 
+**Difficulty** (the bar under Play; `SneekyNight/Difficulty.swift` holds every number):
+
+| | Clock | Hazards | Other |
+|---|---|---|---|
+| Easy | ×1.4 | speed ×0.6 | you: speed ×1.15, slightly higher jump, noise ÷1.5; about 10 taunts to wake Mom; Dad laughs 60 s; Mom and Dad never find you hiding; 3-number codes; 8 dogs; 2 gate keys; smaller chores |
+| Mild | ×1 | as before | the original game |
+| Hard | ×0.85 | speed ×1.3, damage ×1.5 | 50 dogs (10 snacks a trip), 20 hotel floors, bigger chores and wandering cats; boosts ×1.5 as likely; orbs ×2 |
+| Chaos | ×0.85 | speed ×1.6, damage ×2 | Mom and Dad move at your speed; they always find you hiding; a hotel worker passing your hiding place looks behind it 1 time in 3; boosts ×2; orbs ×3 |
+| No Mercy | ×0.5 | speed ×1.8, damage ×2.5 | Mom and Dad are 12% faster than you; the first touch of any box, drawer or rock is a 50-50 trap (noise, and 15 damage where there's health); strangers turn toward you; every third Guide tip is wrong; boosts ×3; orbs ×4 |
+
 ## Controls
 | Keyboard | On screen | Does |
 |---|---|---|
@@ -45,7 +55,8 @@ Clock per level (seconds): 100, 150, 200, 250, 350, 400, 450, 500, 550, 600 — 
    - **Roof (sub level)**: grab the ladder in the garage and use the upstairs hallway window. Star balls appear there (+6% speed each, up to +60%, for the rest of the level) and taunting makes no noise.
 4. **Garden** (250 s, +20 s per 10 plants, +60 s at the gate) — a top-down hedge maze (same layout every time). Walk close to all 100 plants to water them; a pest lands every 25 seconds (E to shoo it, at most 6 at once). Spiky vines stretch across some paths: jump them (touching one brings Dad). The radar station shows thirsty plants, pests, bushes and Dad's timer. Dad checks every 2 minutes with a 10-second warning: hide in a bush. One strange sparkly bush gives the permanent Vines item. The gate dogs grumble (a little noise) if you stand close while they're there. When everything is done, go through the gate while the dogs are away (they come and go about every 10 seconds). Beyond the gate: 3 keys hidden in 3 of 6 spots, and the street gate's code is "Plants" (hint in the corner of the screen).
 5. **Street** (350 s, +30 s when every dog is fed) — the first level with health (100 HP, +45 for every boost you're wearing, plus dungeon upgrades). Strangers take 20 HP if you touch them: jump over them or wait in a bus stop. Feed the 15 dogs with snacks from the fridge at home (the HOME door at the start of the street), 5 at a time. Mom is cooking: she can't see you while she's at the stove or the sink, but she sees what's ahead of her when she walks between them, so crouch under a table. A rat turns up now and then while you carry snacks: it takes one and leaves an accessory (1 in 10: a boost). Then the hotel at the far end: guards outside (30 HP and sent back) and workers inside (15 HP and sent back) see what's in front of them, much less far if you crouch. The first floor is the lobby; the elevator at its far end has 10 floor buttons (2–11). Uncle's room is on a random floor and behind a random one of its 4 doors, new every try, with no hints — except in practice mode, where the Guide tells you (and leads you there). Knocking on the wrong door makes a little noise, and the worker on each floor sends you back down to the lobby. Uncle's door opens with the blue key (it's in your backpack from the start). Talk to Uncle to finish.
-6–10. Not designed yet ("Coming soon").
+6. **Auntie's House** (400 s) — no one chases you; it's you against the clock. Do Auntie's 10 chores across two floors: wash the dishes, fill the cat bowls, water the plants, sweep the dust (just walk over it), take the rubbish bag to the bin (R to carry, E at the bin), set the table, dust the bookshelf, make the bed, pick up the socks, and find her glasses (in a random drawer or box). The next chore is shown at the bottom of the screen. Stepping on a sleeping cat costs 15 s (more on harder modes); filling the noise meter costs 20 s. When all ten are done Auntie walks to the back door; follow her and press E there.
+7–10. Not designed yet ("Coming soon").
 
 ## Getting chased
 When the clock runs out, the noise meter fills, you bump something or Dad spots you, Mom or Dad walks in through a door and comes after you (`SneekyNight/Engine/Chase.swift`). You can outrun them, jump over them, hide (if they didn't see you hide, they look inside half the time when they walk past), or stun them. After one minute without catching you they give up; when it was Mom, the clock is set to 2 minutes. In the Level 4 maze they follow the paths.
@@ -61,8 +72,10 @@ When the clock runs out, the noise meter fills, you bump something or Dad spots 
 Menu → Level Maker. There are no limits: as many objects (start, exit door, keys, boxes — with or without a key inside — rocks, closets, plants, pictures, dogs) and hazards (chair, table, lamp, cans, toy car, spikes, stranger) as you like, and any length or time. Add Mom, Dad and your brother, plus characters that only exist in the Level Maker: Uncle, a Friend, a friendly Ghost and the Guide (talk to them to hear their line), and Guards and Workers (they walk up and down and send you back to the start if they see you; guards also hurt). Write your own words for each. The "Creative" switch in the editor turns creative mode on for that level. Pick a thing, tap the room to place it, drag to move it, drag an empty spot to slide the room. Goal when playing: find every key, then use the exit. Mom wakes when time runs out, you're too loud or you bump a hazard; Dad patrols and chases if he sees you; talk to your brother to hear his line. Levels are saved on the device and shared by all save files (`SneekyNight/LevelMaker.swift`).
 
 ## Extras
+- **Dash cancel**: press dash again during a dash to stop.
+- **Level Maker instant-fail hazards**: lava (jump over it) and a laser that blinks on for 1.7 s and off for 1.3 s (walk through while it's off).
 - **Talk with your brother**: "Let's talk" in his menu opens six topics, each a short back-and-forth (`TalkOverlay.topics` in `Levels/Sibling.swift`).
-- **Hair styles**: eight, in Customize Character (`LookOptions.hairStyles`, drawn in `CharacterView.swift`).
+- **Hair styles**: 20 presets, 11 hair colours and "My own" (six sliders: top, fringe, sides, back, spikes, curls), in Customize Character (`LookOptions.hairStyles`, drawn in `CharacterView.swift`).
 - **Where items came from**: every entry under Lore → Items and Accessories has an origin line (`ItemLore` in `MoreMenus.swift`, `Boost.origin` in `GameState.swift`); a boost's origin also shows when you find it.
 - **The roof** is 3400 wide now; walk past either end to look down on the street or the garden.
 - **Drawing**: the paper stack next to the toy chest in your brother's room opens a drawing pad (`DrawingPad.swift`). The game is paused while you draw, and the picture is kept on the device.

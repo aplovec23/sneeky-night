@@ -87,7 +87,9 @@ final class Chase {
 
     var momOut: Bool { active && who == .mom }
     var dadOut: Bool { active && who == .dad }
-    private var speed: CGFloat { who == .mom ? 225 : 245 }
+    private var speed: CGFloat {
+        Difficulty.current.chaserSpeed(base: who == .mom ? 225 : 245, yours: engine?.pace ?? 290)
+    }
 
     func reset() {
         active = false
@@ -182,10 +184,10 @@ final class Chase {
             award(.trolledMom)
         } else if !laughed {
             laughed = true
-            laughing = 10
+            laughing = Difficulty.current.dadLaugh
             walking = false
             award(.funnySon)
-            setBanner("Dad: \"Ha! That's funny, son. You've got 10 seconds...\"")
+            setBanner("Dad: \"Ha! That's funny, son. You've got \(laughing >= 60 ? "a whole minute" : "10 seconds")...\"")
             bannerTime = 4
         }
     }
@@ -296,6 +298,9 @@ final class Chase {
         if !hiding { sawHide = false }
         wasConcealed = hiding
 
+        // Easy: they never look in hiding places. Chaos and No Mercy: they always know where you are.
+        let mode = Difficulty.current
+        if mode.atLeastChaos && hiding { sawHide = true }
         var target = player
         if hiding && !sawHide {
             // Lost you: wander about, sometimes drifting back to where you are.
@@ -320,7 +325,7 @@ final class Chase {
 
         let name = who == .mom ? "Mom" : "Dad"
         if hiding {
-            guard abs(player.x - pos.x) < 46, abs(player.y - pos.y) < 110 else { return }
+            guard mode != .easy, abs(player.x - pos.x) < 46, abs(player.y - pos.y) < 110 else { return }
             if sawHide {
                 caught("\(name) saw where you hid... and found you!")
             } else if !checkedHide {

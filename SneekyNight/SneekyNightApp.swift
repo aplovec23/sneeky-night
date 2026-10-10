@@ -13,7 +13,7 @@ struct SneekyNightApp: App {
 
 enum Screen: Equatable {
     case title, customize, levels, badges, sounds, saves, settings, updateLog, sideLevels, side(Int), level(Int)
-    case multiplayer, lore, maker, makerEdit(String), makerPlay(String)
+    case difficulty, multiplayer, lore, maker, makerEdit(String), makerPlay(String)
 }
 
 struct ContentView: View {
@@ -31,7 +31,7 @@ struct ContentView: View {
                               onBadges: { screen = .badges }, onSaves: { screen = .saves },
                               onSideLevels: { screen = .sideLevels }, onSettings: { screen = .settings },
                               onUpdateLog: { screen = .updateLog }, onMultiplayer: { screen = .multiplayer },
-                              onMaker: { screen = .maker }, onLore: { screen = .lore })
+                              onMaker: { screen = .maker }, onLore: { screen = .lore }, onDifficulty: { screen = .difficulty })
                 }
             case .saves:
                 FitToPhone(night: true) {
@@ -57,6 +57,8 @@ struct ContentView: View {
                 DungeonLevelView(onExit: { screen = .sideLevels })
             case .side:
                 OtherHallwayLevelView(onExit: { screen = .sideLevels })
+            case .difficulty:
+                FitToPhone(night: true) { DifficultyView(onBack: { screen = .title }) }
             case .multiplayer:
                 FitToPhone(night: true) { MultiplayerView(onBack: { screen = .title }) }
             case .lore:
@@ -96,7 +98,9 @@ struct ContentView: View {
             case .level(4):
                 GardenLevelView(onExit: { screen = .title }, onNext: { screen = .level(5) })
             case .level(5):
-                StreetLevelView(onExit: { screen = .title }, onNext: play)
+                StreetLevelView(onExit: { screen = .title }, onNext: { screen = .level(6) })
+            case .level(6):
+                AuntieLevelView(onExit: { screen = .title }, onNext: play)
             case .level:
                 FitToPhone(night: true) { LevelSelectView(onPick: { screen = .level($0) }, onBack: { screen = .title }) }
             }

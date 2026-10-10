@@ -135,13 +135,13 @@ final class DungeonModel {
         let id = engine.things[i].id
         guard let game, let orbsLeft = left[id], orbsLeft > 0 else { return }
         // One hit in eight knocks out a big orb worth 3.
-        let found = Int.random(in: 0..<8) == 0 ? 3 : 1
+        let found = (Int.random(in: 0..<8) == 0 ? 3 : 1) * Difficulty.current.orbScale
         left[id] = orbsLeft - 1
         game.orbs += found
         game.orbsMined += found
         Sound.craft.play(volume: 0.7)
         Sound.star.play(volume: 0.6)
-        engine.say(found > 1 ? "A BIG orb! +3" : "+1 orb", seconds: 0.9)
+        engine.say(found >= 3 * Difficulty.current.orbScale ? "A BIG orb! +\(found)" : "+\(found) orb\(found == 1 ? "" : "s")", seconds: 0.9)
         if orbsLeft - 1 == 0 {
             engine.things[i].prompt = nil
             regrow[id] = 20
@@ -167,7 +167,7 @@ final class DungeonModel {
         }
         let player = engine.player
         for i in spikes.indices {
-            spikes[i].pos.x += spikes[i].speed * CGFloat(dt)
+            spikes[i].pos.x += spikes[i].speed * CGFloat(dt) * Difficulty.current.hazardSpeed
             if spikes[i].pos.x >= spikes[i].range.upperBound || spikes[i].pos.x <= spikes[i].range.lowerBound {
                 spikes[i].pos.x = min(max(spikes[i].pos.x, spikes[i].range.lowerBound), spikes[i].range.upperBound)
                 spikes[i].speed = -spikes[i].speed

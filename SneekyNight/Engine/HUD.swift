@@ -126,7 +126,10 @@ struct GuideCard: View {
     ]
 
     var body: some View {
-        let all = tips.isEmpty ? Self.general : [Self.general[0]] + tips + [Self.general[4]]
+        let real = tips.isEmpty ? Self.general : [Self.general[0]] + tips + [Self.general[4]]
+        // No Mercy: every third thing he says is wrong.
+        let wrong = Difficulty.current == .noMercy && index % 3 == 2
+        let all = wrong ? GuideTips.mistakes : real
         Button {
             SoundPlayer.shared.tap()
             index += 1
@@ -137,7 +140,7 @@ struct GuideCard: View {
                     .scaleEffect(0.42)
                     .frame(width: 46, height: 70)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("GUIDE  ·  practice mode")
+                    Text(wrong ? "GUIDE  ·  hmm..." : "GUIDE  ·  tip \(index % real.count + 1) of \(real.count)  ·  tap for the next")
                         .font(.game(11, .heavy))
                         .foregroundStyle(Color(red: 0.45, green: 0.25, blue: 0.75))
                     Text(all[index % all.count])
@@ -148,7 +151,7 @@ struct GuideCard: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .frame(width: 250, alignment: .leading)
+                .frame(width: 330, alignment: .leading)
                 .background(LinearGradient(colors: [.white, Color(red: 0.93, green: 0.90, blue: 1.0)], startPoint: .top, endPoint: .bottom),
                             in: RoundedRectangle(cornerRadius: 16))
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(red: 0.55, green: 0.35, blue: 0.85), lineWidth: 3))

@@ -66,7 +66,7 @@ final class BedroomModel {
     func reset() {
         belt.reset()
         engine.load(SceneLayout(width: 1000, floor: 560...680, things: Self.things(), spawn: CGPoint(x: 470, y: 620)))
-        engine.timeLeft = Levels.all[0].seconds
+        engine.timeLeft = Levels.time(1)
         engine.timerOn = true
         engine.resetNoise()
         engine.crouching = false

@@ -13,8 +13,12 @@ struct Look: Equatable {
     var pattern = 0
     /// 0 = no cap.
     var cap = 0
-    /// Hair style, from `LookOptions.hairStyles`. 0 is the classic cut.
+    /// Hair style, from `LookOptions.hairStyles`. 0 is the classic cut; `LookOptions.ownHaircut` is the one you made yourself.
     var hair = 0
+    /// Hair colour, from `LookOptions.hairColors`. 0 keeps the usual brown.
+    var hairColor = 0
+    /// Your own haircut: top height, fringe, sides, back length, spikes and curls, each from 0 to 1.
+    var ownHair: [Double] = [0.4, 0.4, 0.2, 0.3, 0, 0]
     /// One accessory found in a box, if you're wearing one.
     var accessory: Accessory?
     /// Boosting accessories being worn. These stack.
@@ -44,7 +48,18 @@ enum LookOptions {
     static let patterns: [String?] = ["star.fill", "heart.fill", "bolt.fill", "moon.fill", "pawprint.fill", nil]
     /// Cap colours; index 0 = no cap.
     static let caps: [Color?] = [nil, .red, Color(red: 0.2, green: 0.4, blue: 0.9), .green, Color(white: 0.15), .orange, .purple]
-    static let hairStyles = ["Classic", "Spiky", "Curly", "Long", "Ponytail", "Buzz cut", "Bob", "Mohawk"]
+    static let hairStyles = ["Classic", "Spiky", "Curly", "Long", "Ponytail", "Buzz cut", "Bob", "Mohawk",
+                             "Pigtails", "Afro", "Bun", "Space buns", "Braid", "Bowl cut", "Side part", "Quiff",
+                             "Flat top", "Bald", "Long wavy", "Short fringe"]
+    /// The style number that means "the haircut I made myself".
+    static let ownHaircut = 99
+    static let ownHairParts = ["Top", "Fringe", "Sides", "Back", "Spikes", "Curls"]
+    /// Hair colours; the first keeps the usual brown.
+    static let hairColors: [Color?] = [
+        nil, Color(white: 0.10), Color(red: 0.25, green: 0.15, blue: 0.08), Color(red: 0.85, green: 0.70, blue: 0.30),
+        Color(red: 0.80, green: 0.35, blue: 0.12), Color(white: 0.60), Color(white: 0.95), Color(red: 0.25, green: 0.50, blue: 0.95),
+        Color(red: 1.0, green: 0.50, blue: 0.75), Color(red: 0.30, green: 0.75, blue: 0.40), Color(red: 0.60, green: 0.35, blue: 0.85),
+    ]
     /// Extra colours unlocked in the secret room of Side Level 1.
     static let extraShirts: [Color] = [
         Color(white: 0.15), .white, Color(red: 0.55, green: 0.95, blue: 0.45), Color(red: 0.45, green: 0.30, blue: 0.85),
@@ -515,6 +530,8 @@ final class GameState {
             look.pattern = defaults.integer(forKey: p + "pattern")
             look.cap = defaults.integer(forKey: p + "cap")
             look.hair = defaults.integer(forKey: p + "hair")
+            look.hairColor = defaults.integer(forKey: p + "hairColor")
+            if let own = defaults.array(forKey: p + "ownHair") as? [Double], own.count == look.ownHair.count { look.ownHair = own }
             look.accessory = Accessory.find(defaults.string(forKey: p + "accessory") ?? "")
             look.boosts = Set((defaults.stringArray(forKey: p + "wornBoosts") ?? []).compactMap(Boost.init(rawValue:)))
             look.hiddenBoosts = Set((defaults.stringArray(forKey: p + "hiddenBoosts") ?? []).compactMap(Boost.init(rawValue:)))
@@ -618,7 +635,9 @@ final class GameState {
     /// 1 time in 15 a boost you don't have, otherwise 1 time in 5 a new accessory.
     func rollLoot(boostOdds: Int = 15) -> Loot? {
         if !hasBat && Int.random(in: 0..<12) == 0 { return .bat }
-        if Int.random(in: 0..<boostOdds) == 0, let boost = Boost.findable.filter({ !boosts.contains($0) }).randomElement() {
+        // Harder modes find boosts more often.
+        let odds = max(2, Int((Double(boostOdds) / Difficulty.current.lootScale).rounded()))
+        if Int.random(in: 0..<odds) == 0, let boost = Boost.findable.filter({ !boosts.contains($0) }).randomElement() {
             return .boost(boost)
         }
         if Int.random(in: 0..<5) == 0, let item = Accessory.all.filter({ !accessories.contains($0) }).randomElement() {
@@ -699,7 +718,8 @@ final class GameState {
 
     /// Side Level 3 (Uncle's car): every level won and 30 badges. It isn't needed for the Lore or creative mode.
     var carRequirements: [(text: String, met: Bool)] {
-        [("Win every level", allLevelsWon),
+        // The ride happens before Level 6, so it only needs the levels up to the hotel.
+        [("Win Levels 1 to 5", (1...5).allSatisfy { completedLevels.contains($0) }),
          ("Earn 30 badges (\(min(badges.count, 30))/30)", badges.count >= 30)]
     }
     var carUnlocked: Bool { carRequirements.allSatisfy(\.met) }
@@ -761,6 +781,8 @@ final class GameState {
         defaults.set(look.pattern, forKey: p + "pattern")
         defaults.set(look.cap, forKey: p + "cap")
         defaults.set(look.hair, forKey: p + "hair")
+        defaults.set(look.hairColor, forKey: p + "hairColor")
+        defaults.set(look.ownHair, forKey: p + "ownHair")
         defaults.set(look.accessory?.id, forKey: p + "accessory")
         defaults.set(look.boosts.map(\.rawValue), forKey: p + "wornBoosts")
         defaults.set(look.hiddenBoosts.map(\.rawValue), forKey: p + "hiddenBoosts")
@@ -825,6 +847,9 @@ struct LevelInfo: Identifiable {
 }
 
 enum Levels {
+    /// The clock for a level on the difficulty being played.
+    static func time(_ level: Int) -> Double { (seconds[level - 1] * Difficulty.current.timeScale).rounded() }
+
     static let seconds: [Double] = [100, 150, 200, 250, 350, 400, 450, 500, 550, 600]
 
     static let all: [LevelInfo] = (1...10).map { id in
@@ -834,6 +859,7 @@ enum Levels {
         case 3: LevelInfo(id: 3, room: "Downstairs", symbol: "stairs", seconds: seconds[2], isReady: true)
         case 4: LevelInfo(id: 4, room: "Garden", symbol: "leaf.fill", seconds: seconds[3], isReady: true)
         case 5: LevelInfo(id: 5, room: "Street", symbol: "road.lanes", seconds: seconds[4], isReady: true)
+        case 6: LevelInfo(id: 6, room: "Auntie's House", symbol: "cat.fill", seconds: seconds[5], isReady: true)
         default: LevelInfo(id: id, room: "Coming soon", symbol: "lock.fill", seconds: seconds[id - 1], isReady: false)
         }
     }

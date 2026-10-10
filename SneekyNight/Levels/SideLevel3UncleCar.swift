@@ -43,7 +43,7 @@ struct UncleCarView: View {
         ("Auntie's house", "Every window is dark except one. Somebody is still awake at the very top.", "house.fill"),
         ("\"You came all this way?\"", "Auntie opens the door in her dressing gown. She doesn't look surprised at all. \"Come in. Quietly. The cats are asleep.\"", "door.left.hand.open"),
         ("The locked study", "Upstairs is a room Auntie keeps locked. On the wall: a map, covered in pins, and a bundle of Grandpa's letters.", "map.fill"),
-        ("Level 6: Auntie's House", "Coming soon. Auntie knows where Grandpa is... but she won't just tell you.", "lock.fill"),
+        ("Level 6: Auntie's House", "Auntie knows where Grandpa is... but she won't just tell you. First, there are chores. Play Level 6 to find out!", "cat.fill"),
     ]
 
     var body: some View {

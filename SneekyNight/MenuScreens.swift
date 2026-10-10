@@ -15,6 +15,7 @@ struct TitleView: View {
     var onMultiplayer: () -> Void = {}
     var onMaker: () -> Void = {}
     var onLore: () -> Void = {}
+    var onDifficulty: () -> Void = {}
     @State private var bob = false
 
     private var playTitle: String {
@@ -66,6 +67,23 @@ struct TitleView: View {
                         .foregroundStyle(.white.opacity(0.85))
                         .padding(.bottom, 8)
                     MenuButton(title: playTitle, symbol: "play.fill", color: Palette.button, big: true, action: onPlay)
+                    Button {
+                        SoundPlayer.shared.tap()
+                        onDifficulty()
+                    } label: {
+                        let mode = Difficulty.current
+                        HStack(spacing: 8) {
+                            Image(systemName: mode.symbol)
+                            Text("Difficulty: \(mode.name)")
+                            Image(systemName: "chevron.right").font(.game(14)).opacity(0.7)
+                        }
+                        .font(.game(19))
+                        .foregroundStyle(.white)
+                        .frame(width: 440, height: 38)
+                        .background(mode.color.gradient, in: Capsule())
+                        .overlay(Capsule().stroke(.white.opacity(0.3), lineWidth: 2))
+                    }
+                    .buttonStyle(PressableStyle())
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(140), spacing: 10), count: 3), spacing: 10) {
                         MenuTile(title: "Levels", symbol: "map.fill", color: Color(red: 0.35, green: 0.30, blue: 0.70), action: onLevels)
                         MenuTile(title: "Side Levels", symbol: "signpost.right.fill", color: Color(red: 0.20, green: 0.45, blue: 0.45), action: onSideLevels)
@@ -285,9 +303,44 @@ struct CustomizeView: View {
                             }
                         }
                         section("Hair style") {
-                            LazyVGrid(columns: Array(repeating: GridItem(.fixed(124), spacing: 10), count: 4), alignment: .leading, spacing: 10) {
-                                ForEach(LookOptions.hairStyles.indices, id: \.self) { i in
-                                    chip(LookOptions.hairStyles[i], selected: look.hair == i) { look.hair = i }
+                            VStack(alignment: .leading, spacing: 10) {
+                                LazyVGrid(columns: Array(repeating: GridItem(.fixed(124), spacing: 10), count: 4), alignment: .leading, spacing: 10) {
+                                    ForEach(LookOptions.hairStyles.indices, id: \.self) { i in
+                                        chip(LookOptions.hairStyles[i], selected: look.hair == i) { look.hair = i }
+                                    }
+                                    chip("✂ My own", selected: look.hair == LookOptions.ownHaircut) { look.hair = LookOptions.ownHaircut }
+                                }
+                                if look.hair == LookOptions.ownHaircut {
+                                    // Make your own haircut: six sliders.
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Make your own haircut")
+                                            .font(.game(18, .heavy))
+                                            .foregroundStyle(Palette.gold)
+                                        ForEach(LookOptions.ownHairParts.indices, id: \.self) { part in
+                                            HStack(spacing: 12) {
+                                                Text(LookOptions.ownHairParts[part])
+                                                    .font(.game(18, .semibold))
+                                                    .foregroundStyle(.white)
+                                                    .frame(width: 80, alignment: .leading)
+                                                Slider(value: Binding(get: { look.ownHair[part] }, set: { look.ownHair[part] = $0 }), in: 0...1)
+                                                    .tint(Palette.button)
+                                                    .frame(width: 320)
+                                            }
+                                        }
+                                    }
+                                    .padding(14)
+                                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
+                                }
+                            }
+                        }
+                        section("Hair colour") {
+                            HStack(spacing: 10) {
+                                ForEach(LookOptions.hairColors.indices, id: \.self) { i in
+                                    if let color = LookOptions.hairColors[i] {
+                                        swatch(color, selected: look.hairColor == i) { look.hairColor = i }
+                                    } else {
+                                        swatch(Color(red: 0.40, green: 0.24, blue: 0.13), selected: look.hairColor == 0) { look.hairColor = 0 }
+                                    }
                                 }
                             }
                         }

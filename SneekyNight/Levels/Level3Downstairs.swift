@@ -102,8 +102,9 @@ final class DownstairsModel {
     @ObservationIgnored private var starCount = 0
 
     static let floor = HallwayModel.floor
-    static let passcode = "12345"
-    static let exitCode = "0090"
+    /// On Easy both codes are just three numbers.
+    static var passcode: String { Difficulty.current == .easy ? "123" : "12345" }
+    static var exitCode: String { Difficulty.current == .easy ? "090" : "0090" }
     static let searchSpots = ["couch", "bookshelf", "kitchenDrawer", "bin", "toolbox", "trunk"]
     static let lockboxSpots = ["lockbox1", "lockbox2", "lockbox3", "lockbox4", "lockbox5"]
     static let widths: [Room: CGFloat] = [.stairs: 1800, .downstairs: 3000, .garage: 1500, .basement: 1900, .yard: 1600,
@@ -185,7 +186,7 @@ final class DownstairsModel {
         ]
         room = .stairs
         engine.load(SceneLayout(width: Self.widths[.stairs]!, floor: Self.floor, things: saved[.stairs]!, spawn: CGPoint(x: 220, y: 615)))
-        engine.timeLeft = Levels.all[2].seconds
+        engine.timeLeft = Levels.time(3)
         engine.timerOn = true
         engine.resetNoise()
         engine.noiseFactor = 1
@@ -749,7 +750,7 @@ final class DownstairsModel {
     func closePhone() {
         showPhone = false
         engine.running = phase == .sneaking || phase == .warning
-        if hasPhoneCode { engine.say("0090! Dad finished in the garage — he's in the basement now.", seconds: 4) }
+        if hasPhoneCode { engine.say("\(Self.exitCode)! Dad finished in the garage — he's in the basement now.", seconds: 4) }
     }
 
     func readCode() {
@@ -1267,7 +1268,7 @@ final class DownstairsModel {
             if mom == .asleep { return hasToy ? "Throw the toy in the upstairs hallway, then hide until Mom walks past." : "Upstairs: grab a toy from my brother's room." }
             return "Mom is out of her room! Grab her phone from her nightstand."
         }
-        if room != .yard && !exitOpen { return "The basement door code is 0090. Watch out for Dad down there — closets are safe." }
+        if room != .yard && !exitOpen { return "The basement door code is \(Self.exitCode). Watch out for Dad down there — closets are safe." }
         return doorLocked ? "Walk to the garden gate!" : "Lock the door with the dog's key. Quick!"
     }
 
@@ -1372,7 +1373,7 @@ struct DownstairsLevelView: View {
             world.allowsHitTesting(false)
         } extra: {
             if model.showKeypad {
-                NumberPadOverlay(title: "Basement door code", digits: 4, onSubmit: model.submitCode, onCancel: model.closeKeypad)
+                NumberPadOverlay(title: "Basement door code", digits: DownstairsModel.exitCode.count, onSubmit: model.submitCode, onCancel: model.closeKeypad)
             }
             if model.showPhone {
                 PhoneOverlay(passcode: DownstairsModel.passcode, code: DownstairsModel.exitCode,

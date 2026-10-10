@@ -417,7 +417,8 @@ struct MomView: View {
     var stunned = false
     var walking = false
 
-    private let robe = Color(red: 0.85, green: 0.45, blue: 0.60)
+    /// Mom's pink dressing gown. Auntie wears the same cut in teal.
+    var robe = Color(red: 0.85, green: 0.45, blue: 0.60)
     private let skin = Color(red: 0.96, green: 0.80, blue: 0.66)
 
     var body: some View {
