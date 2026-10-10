@@ -160,6 +160,8 @@ struct BigButton: View {
 
 struct RoundIconButton: View {
     let symbol: String
+    /// The keyboard key that does the same thing, shown as a small letter (when key letters are on).
+    var key: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -174,6 +176,16 @@ struct RoundIconButton: View {
                 .background(RadialGradient(colors: [Color(red: 0.30, green: 0.24, blue: 0.55).opacity(0.85), .black.opacity(0.6)],
                                            center: .top, startRadius: 2, endRadius: 60), in: Circle())
                 .overlay(Circle().stroke(Palette.gold.opacity(0.5), lineWidth: 2))
+                .overlay(alignment: .bottomTrailing) {
+                    if let key, Settings.shared.keyLabels {
+                        Text(key)
+                            .font(.game(13, .heavy))
+                            .foregroundStyle(.black)
+                            .frame(minWidth: 22, minHeight: 22)
+                            .background(.white, in: Capsule())
+                            .offset(x: 4, y: 4)
+                    }
+                }
         }
         .buttonStyle(PressableStyle())
     }

@@ -145,6 +145,19 @@ struct LevelScaffold<World: View, Extra: View>: View {
                 engine.placePlayer2()
                 if game.multiplayer { game.award(.multiplayer) }
                 engine.onPause = { setPause(!pauseOpen) }
+                engine.onMenuKey = { key in
+                    switch key {
+                    case .menu: onHome()
+                    case .restart: onRestart()
+                    case .hint: onHint()
+                    case .admin:
+                        if engine.creative {
+                            adminOpen = true
+                            engine.paused = true
+                        }
+                    default: break
+                    }
+                }
             }
             .onDisappear {
                 // Creative-mode changes don't follow you out of the level.
@@ -192,9 +205,9 @@ struct LevelScaffold<World: View, Extra: View>: View {
     private var topBar: some View {
         VStack {
             HStack(spacing: 14) {
-                RoundIconButton(symbol: "pause.fill") { setPause(true) }
-                RoundIconButton(symbol: "house.fill", action: onHome)
-                RoundIconButton(symbol: "arrow.counterclockwise", action: onRestart)
+                RoundIconButton(symbol: "pause.fill", key: GameKey.pause.label) { setPause(true) }
+                RoundIconButton(symbol: "house.fill", key: GameKey.menu.label, action: onHome)
+                RoundIconButton(symbol: "arrow.counterclockwise", key: GameKey.restart.label, action: onRestart)
                 Spacer()
                 Text(title)
                     .font(.game(26))
@@ -209,12 +222,12 @@ struct LevelScaffold<World: View, Extra: View>: View {
                 }
                 Spacer()
                 if engine.creative {
-                    RoundIconButton(symbol: "wand.and.stars") {
+                    RoundIconButton(symbol: "wand.and.stars", key: GameKey.admin.label) {
                         adminOpen = true
                         engine.paused = true
                     }
                 }
-                RoundIconButton(symbol: "lightbulb.fill", action: onHint)
+                RoundIconButton(symbol: "lightbulb.fill", key: GameKey.hint.label, action: onHint)
             }
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -253,7 +266,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                 .foregroundStyle(.orange)
             HStack(spacing: 8) {
                 Joystick(engine: engine, k: k * 0.66, second: true)
-                ActionButton(key: "↩", symbol: "hand.raised.fill", size: 58 * k, color: .orange, action: engine.interact2)
+                ActionButton(key: GameKey.use2.label, symbol: "hand.raised.fill", size: 58 * k, color: .orange, action: engine.interact2)
             }
         }
         .padding(.leading, 10)
@@ -289,30 +302,30 @@ struct LevelScaffold<World: View, Extra: View>: View {
         HStack(alignment: .center, spacing: 12) {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    ActionButton(key: "T", symbol: "face.smiling.inverse", size: 58 * k, color: .pink, action: engine.taunt)
-                    ActionButton(key: "C", symbol: "arrow.down.to.line", size: 58 * k,
+                    ActionButton(key: GameKey.taunt.label, symbol: "face.smiling.inverse", size: 58 * k, color: .pink, action: engine.taunt)
+                    ActionButton(key: GameKey.crouch.label, symbol: "arrow.down.to.line", size: 58 * k,
                                  color: engine.ducking ? .purple : Color(white: 0.35), action: engine.toggleCrouch)
-                    ActionButton(key: "R", symbol: engine.carrying == nil ? "shippingbox.fill" : "arrow.down.to.line",
+                    ActionButton(key: GameKey.carry.label, symbol: engine.carrying == nil ? "shippingbox.fill" : "arrow.down.to.line",
                                  size: 58 * k, color: .teal, action: engine.moveObject)
                 }
                 if engine.canRun || engine.canDash {
                     HStack(spacing: 8) {
                         if engine.canRun {
-                            ActionButton(key: "Shift", symbol: "figure.run", size: 58 * k,
+                            ActionButton(key: GameKey.run.label, symbol: "figure.run", size: 58 * k,
                                          color: engine.runHeld ? .green : Color(white: 0.35)) { engine.runHeld.toggle() }
                         }
                         if engine.canDash {
-                            ActionButton(key: "Q", symbol: "wind", size: 58 * k, color: .cyan, action: engine.dash)
+                            ActionButton(key: GameKey.dash.label, symbol: "wind", size: 58 * k, color: .cyan, action: engine.dash)
                         }
                     }
                 }
             }
-            ActionButton(key: "Space", symbol: "arrow.up", size: 82 * k, color: .blue, action: engine.jump)
-            ActionButton(key: "E", symbol: "hand.raised.fill", size: 100 * k,
+            ActionButton(key: GameKey.jump.label, symbol: "arrow.up", size: 82 * k, color: .blue, action: engine.jump)
+            ActionButton(key: GameKey.use.label, symbol: "hand.raised.fill", size: 100 * k,
                          color: currentPrompt == nil ? .gray : Palette.button, action: engine.interact)
                 .overlay(alignment: Settings.shared.swapSides ? .topLeading : .topTrailing) {
                     if let prompt = currentPrompt {
-                        Text("E · \(prompt)")
+                        Text("\(GameKey.use.label) · \(prompt)")
                             .font(.game(20))
                             .foregroundStyle(.black)
                             .fixedSize()
@@ -421,6 +434,17 @@ struct Joystick: View {
                 .fill(RadialGradient(colors: [.white.opacity(0.10), .black.opacity(0.4)], center: .center, startRadius: 4, endRadius: 80 * k))
                 .overlay(Circle().stroke((second ? Color.orange : .white).opacity(0.4), lineWidth: 3))
                 .frame(width: 150 * k, height: 150 * k)
+            if Settings.shared.keyLabels {
+                // The four keys that do the same as pushing the stick each way.
+                let keys: [GameKey] = second ? [.up2, .left2, .down2, .right2] : [.up, .left, .down, .right]
+                let spots: [CGSize] = [CGSize(width: 0, height: -60), CGSize(width: -60, height: 0), CGSize(width: 0, height: 60), CGSize(width: 60, height: 0)]
+                ForEach(0..<4, id: \.self) { i in
+                    Text(keys[i].label)
+                        .font(.game(13 * k, .heavy))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .offset(x: spots[i].width * k, y: spots[i].height * k)
+                }
+            }
             Circle()
                 .fill(RadialGradient(colors: [.white, Color(white: 0.75)], center: .topLeading, startRadius: 2, endRadius: 60 * k))
                 .frame(width: 64 * k, height: 64 * k)

@@ -9,7 +9,8 @@ final class ItemBelt {
     enum Item: Int, CaseIterable {
         case vines, lightning, toy, bat, cloud, hat
 
-        var key: String { ["V", "F", "G", "B", "X", "H"][rawValue] }
+        /// The letter on the button, from the one list of keys in `GameKey`.
+        var key: String { GameKey.items[rawValue].label }
         var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill"][rawValue] }
         var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color][rawValue] }
     }

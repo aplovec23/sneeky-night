@@ -41,6 +41,10 @@ In practice mode the Guide also walks in the room with you ("Follow me!") and le
 | Shift (hold) | Running button (switch) | Run — once learned. Noisy! |
 | Q | Wind button | Dash — once learned |
 | V / F / G / B / X | Item buttons (middle) | Vines / Lightning Ball / Brother's toy / Bat / Cloud — once you own them |
+| P (or Esc) / M / N / L / Z | Top buttons | Pause / Menu / Restart / Hint / Creative wand |
+| Arrow keys, Return | Player 2's joystick and hand | Player 2 walks and uses things (multiplayer) |
+
+Every key lives in one list, `SneekyNight/Engine/GameKey.swift`: the key the game listens for and the letter drawn on the on-screen button both come from it, so they always match. Change a key there and both change.
 | H | Hat button | The Guide's Hat on / off (only on a device it was given to) |
 
 Dash goes whichever way the joystick (or keys) is pointing.

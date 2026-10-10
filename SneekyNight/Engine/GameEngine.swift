@@ -213,6 +213,8 @@ final class GameEngine {
     @ObservationIgnored var onKO: () -> Void = {}
     /// Esc or P on a keyboard.
     @ObservationIgnored var onPause: () -> Void = {}
+    /// Menu (M), restart (N), hint (L) or the creative wand (Z) was pressed on a keyboard.
+    @ObservationIgnored var onMenuKey: (GameKey) -> Void = { _ in }
     @ObservationIgnored private var hurtTime = 0.0
     /// Things already touched once on No Mercy (so each can only be a trap the first time).
     @ObservationIgnored private var testedItems: Set<String> = []
@@ -452,26 +454,28 @@ final class GameEngine {
         let pressed = keys.subtracting(lastKeys)
         lastKeys = keys
 
-        if pressed.contains(.escape) || pressed.contains(.keyP) { onPause() }
+        if pressed.contains(.escape) || pressed.contains(GameKey.pause.code) { onPause() }
         guard !paused else {
             if walking { walking = false }
             if walking2 { walking2 = false }
             return
         }
+        // The buttons along the top of the level have keys too.
+        for key in [GameKey.menu, .restart, .hint, .admin] where pressed.contains(key.code) { onMenuKey(key) }
 
         guard running else {
             walking = false
             sprinting = false
             if tauntOnly {
                 updateTimers(dt)
-                if pressed.contains(.keyT) { taunt() }
+                if pressed.contains(GameKey.taunt.code) { taunt() }
                 itemKeys(pressed)
-            } else if !pressed.isDisjoint(with: [.keyE, .returnOrEnter, .spacebar]) {
+            } else if !pressed.isDisjoint(with: [GameKey.use.code, GameKey.use2.code, GameKey.jump.code]) {
                 onConfirm()
             }
             return
         }
-        let shift = keys.contains(.leftShift) || keys.contains(.rightShift)
+        let shift = keys.contains(GameKey.run.code) || keys.contains(.rightShift)
 
         if timerOn && !clockFrozen {
             timeLeft = max(0, timeLeft - dt)
@@ -501,13 +505,13 @@ final class GameEngine {
         onTick(dt)
         updateGuide(dt)
 
-        if pressed.contains(.keyE) { interact() }
-        if pressed.contains(.spacebar) { jump() }
-        if pressed.contains(.keyR) { moveObject() }
-        if pressed.contains(.keyC) { toggleCrouch() }
-        if pressed.contains(.keyT) { taunt() }
-        if pressed.contains(.keyQ) { dash() }
-        if pressed.contains(.returnOrEnter) { interact2() }
+        if pressed.contains(GameKey.use.code) { interact() }
+        if pressed.contains(GameKey.jump.code) { jump() }
+        if pressed.contains(GameKey.carry.code) { moveObject() }
+        if pressed.contains(GameKey.crouch.code) { toggleCrouch() }
+        if pressed.contains(GameKey.taunt.code) { taunt() }
+        if pressed.contains(GameKey.dash.code) { dash() }
+        if pressed.contains(GameKey.use2.code) { interact2() }
         itemKeys(pressed)
     }
 
@@ -516,10 +520,10 @@ final class GameEngine {
     private func movePlayer2(keys: Set<GCKeyCode>, dt: CGFloat) {
         guard var p = player2 else { return }
         var v = stick2
-        if keys.contains(.leftArrow) { v.dx -= 1 }
-        if keys.contains(.rightArrow) { v.dx += 1 }
-        if keys.contains(.upArrow) { v.dy -= 1 }
-        if keys.contains(.downArrow) { v.dy += 1 }
+        if keys.contains(GameKey.left2.code) { v.dx -= 1 }
+        if keys.contains(GameKey.right2.code) { v.dx += 1 }
+        if keys.contains(GameKey.up2.code) { v.dy -= 1 }
+        if keys.contains(GameKey.down2.code) { v.dy += 1 }
         let length = hypot(v.dx, v.dy)
         if length > 1 { v.dx /= length; v.dy /= length }
         let speed: CGFloat = 300
@@ -557,12 +561,7 @@ final class GameEngine {
     }
 
     private func itemKeys(_ pressed: Set<GCKeyCode>) {
-        if pressed.contains(.keyV) { onItemKey(0) }
-        if pressed.contains(.keyF) { onItemKey(1) }
-        if pressed.contains(.keyG) { onItemKey(2) }
-        if pressed.contains(.keyB) { onItemKey(3) }
-        if pressed.contains(.keyX) { onItemKey(4) }
-        if pressed.contains(.keyH) { onItemKey(5) }
+        for (n, key) in GameKey.items.enumerated() where pressed.contains(key.code) { onItemKey(n) }
     }
 
     private func updateTimers(_ dt: Double) {
@@ -608,10 +607,10 @@ final class GameEngine {
         var v = stick
         // With two players the arrow keys belong to player 2.
         let arrows = player2 == nil
-        if keys.contains(.keyA) || (arrows && keys.contains(.leftArrow)) { v.dx -= 1 }
-        if keys.contains(.keyD) || (arrows && keys.contains(.rightArrow)) { v.dx += 1 }
-        if keys.contains(.keyW) || (arrows && keys.contains(.upArrow)) { v.dy -= 1 }
-        if keys.contains(.keyS) || (arrows && keys.contains(.downArrow)) { v.dy += 1 }
+        if keys.contains(GameKey.left.code) || (arrows && keys.contains(GameKey.left2.code)) { v.dx -= 1 }
+        if keys.contains(GameKey.right.code) || (arrows && keys.contains(GameKey.right2.code)) { v.dx += 1 }
+        if keys.contains(GameKey.up.code) || (arrows && keys.contains(GameKey.up2.code)) { v.dy -= 1 }
+        if keys.contains(GameKey.down.code) || (arrows && keys.contains(GameKey.down2.code)) { v.dy += 1 }
         let length = hypot(v.dx, v.dy)
         if length > 1 { v.dx /= length; v.dy /= length }
         input = v
@@ -794,9 +793,8 @@ final class GameEngine {
         guideTalk = 2.6
     }
 
-    private static let watchedKeys: [GCKeyCode] = [.keyW, .keyA, .keyS, .keyD, .upArrow, .downArrow, .leftArrow, .rightArrow,
-                                                   .keyE, .keyR, .keyC, .keyT, .keyQ, .keyV, .keyF, .keyG, .keyB, .keyX, .keyH, .keyP,
-                                                   .escape, .leftShift, .rightShift, .spacebar, .returnOrEnter]
+    /// Every key the game listens for: all of `GameKey`, plus the extras that share a job.
+    private static let watchedKeys: [GCKeyCode] = GameKey.allCases.map(\.code) + GameKey.alsoWatched
 
     private func pressedKeys() -> Set<GCKeyCode> {
         // No keyboard (most iPads and iPhones): nothing to check.
