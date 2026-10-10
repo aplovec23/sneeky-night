@@ -785,7 +785,10 @@ struct UpdateLogView: View {
         ("The cinema", [
             "New side level: The Cinema. Pick one of 10 shows and pick your seat.",
             "Every show is one hour long. If you leave, your place is kept for next time.",
+            "Each show now tells one whole story in 8 parts. Every part is different: nothing repeats.",
             "Each time you watch a show to the end you get 1000 orbs.",
+            "The films are more alive: the cast walks to new spots, hops, crouches, taunts and looks around on every line, the camera moves in close and back out, and the sets move too (rising lanterns, rolling toys, steam, glowing orbs).",
+            "Cinema sounds and music: a lobby tune, four kinds of film music, the projector starting, seats, tickets, popcorn, a chime for each new part, and applause at the end.",
         ]),
         ("Biggest update", [
             "Five difficulty modes: Easy, Mild, Hard, Chaos and No Mercy. Pick one under the Play button. Mild is the game as it was.",

@@ -7,6 +7,7 @@ enum Sound: String, CaseIterable {
     case unlock, buzz, beep, chair, table, lamp, squeak, caught, mom, win, tick, heavy
     case taunt, dash, dad, crouch, magic, woof, creak, craft, lightSwitch, star
     case ouch, water, bug, rustle, whip, bonk
+    case applause, projector, seat, ticket, popcorn, chime
 
     func play(volume: Float = 1) {
         SoundPlayer.shared.play(self, volume: volume)
@@ -55,6 +56,12 @@ enum Sound: String, CaseIterable {
         case .rustle: "Bush"
         case .whip: "Vine whip"
         case .bonk: "Bat bonk"
+        case .applause: "Cinema: applause"
+        case .projector: "Cinema: projector starting"
+        case .seat: "Cinema: sitting down"
+        case .ticket: "Cinema: ticket"
+        case .popcorn: "Cinema: popcorn"
+        case .chime: "Cinema: new part"
         }
     }
 
@@ -82,6 +89,8 @@ final class SoundPlayer {
 
     private var players: [Sound: [AVAudioPlayer]] = [:]
     private var musicPlayer: AVAudioPlayer?
+    private var filmPlayer: AVAudioPlayer?
+    private var filmName: String?
     private let haptic = UIImpactFeedbackGenerator(style: .light)
 
     private init() {
@@ -143,7 +152,31 @@ final class SoundPlayer {
         if musicPlayer.isPlaying { musicPlayer.pause() } else { musicPlayer.play() }
     }
 
+    /// The cinema has its own music: a tune for the lobby and one for each kind of film
+    /// (Sounds/film….wav). While it plays, the game's usual tune is paused.
+    func playFilmMusic(_ name: String) {
+        guard name != filmName else { return }
+        filmPlayer?.stop()
+        filmPlayer = nil
+        filmName = name
+        guard let url = Bundle.main.url(forResource: name, withExtension: "wav") else { return }
+        musicPlayer?.pause()
+        filmPlayer = try? AVAudioPlayer(contentsOf: url)
+        filmPlayer?.numberOfLoops = -1
+        updateMusicVolume()
+        filmPlayer?.play()
+    }
+
+    /// Leaving the cinema: its music stops and the usual tune carries on.
+    func stopFilmMusic() {
+        filmPlayer?.stop()
+        filmPlayer = nil
+        filmName = nil
+        musicPlayer?.play()
+    }
+
     func updateMusicVolume() {
+        filmPlayer?.volume = Float(Settings.shared.master * Settings.shared.music) * 0.7
         musicPlayer?.volume = Float(Settings.shared.master * Settings.shared.music) * 0.6
     }
 

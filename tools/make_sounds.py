@@ -115,4 +115,69 @@ def music():
         if f: add(int(n * beat * RATE), tone(f, beat * 1.4, 0.11, curve=3, attack=0.02, vib=4))
     return out
 save("music", music())
+
+# --- The cinema: sound effects ---
+def applause(dur=2.8):
+    n = int(dur * RATE); out = [0.0] * n
+    for _ in range(520):
+        start = random.randint(0, n - 600)
+        clap = noise(0.02, random.uniform(0.25, 0.6), random.uniform(0.2, 0.6), curve=7)
+        fade = 1.0 if start < n * 0.6 else max(0.0, 1 - (start - n * 0.6) / (n * 0.4))
+        for i, v in enumerate(clap): out[start + i] += v * fade
+    return out
+
+def projector(dur=1.6):
+    n = int(dur * RATE); out = [0.0] * n
+    # The motor spins up, with the film ticking through the gate 24 times a second.
+    hum = tone(55, dur, 0.22, f1=110, shape="saw", curve=0.4, attack=0.3)
+    for i, v in enumerate(hum): out[i] += v
+    t = 0.0
+    while t < dur - 0.03:
+        tick = noise(0.012, 0.35 * min(1.0, t / 0.5 + 0.2), 0.3, curve=7)
+        for i, v in enumerate(tick): out[int(t * RATE) + i] += v
+        t += 1 / 24
+    return out
+
+save("applause", applause())
+save("projector", projector())
+save("seat", cat(tone(190, 0.16, 0.35, f1=130, shape="saw", curve=2, vib=18), mix(noise(0.08, 0.45, 0.9, curve=6), tone(80, 0.1, 0.4, curve=6))))
+save("ticket", cat(noise(0.11, 0.45, 0.15, curve=2, attack=0.01), silence(0.03), tone(1318, 0.35, 0.4, curve=4), ))
+save("popcorn", cat(noise(0.04, 0.4, 0.3, curve=7), silence(0.07), noise(0.05, 0.3, 0.4, curve=7), silence(0.09), noise(0.035, 0.35, 0.25, curve=7)))
+save("chime", mix(tone(784, 0.9, 0.3, curve=3), cat(silence(0.14), tone(988, 0.8, 0.3, curve=3)), cat(silence(0.28), tone(1175, 1.0, 0.3, curve=3))))
+
+# --- The cinema: music. Each one is a loop of 4 chords x 4 beats. ---
+def score(beat, chords, melody, lead="tri", lead_vol=0.12, arp=True, bass_vol=0.15, vib=4, staccato=False):
+    total = int(beat * 16 * RATE)
+    out = [0.0] * total
+    def add(start, samples):
+        for i, v in enumerate(samples):
+            if start + i < total: out[start + i] += v
+    for c, chord in enumerate(chords):
+        add(int(c * 4 * beat * RATE), tone(chord[0] / 4, beat * 4, bass_vol, curve=1.2, attack=0.1))
+        steps = 8 if arp else 4
+        for b in range(steps):
+            start = int((c * 4 + b * 4 / steps) * beat * RATE)
+            add(start, tone(chord[b % len(chord)] / 2, beat * (0.5 if arp else 1.5), 0.10, shape="tri", curve=3 if arp else 2, attack=0.01))
+    for n, f in enumerate(melody):
+        if f:
+            add(int(n * beat * RATE / (len(melody) / 16)), tone(f, beat * (0.45 if staccato else 1.3), lead_vol, shape=lead, curve=5 if staccato else 2.5, attack=0.01, vib=vib))
+    return out
+
+Am, F, C, G = (220.0, 261.6, 329.6), (174.6, 220.0, 261.6), (261.6, 329.6, 392.0), (196.0, 246.9, 293.7)
+Dm, Bb, Gm, A = (293.7, 349.2, 440.0), (233.1, 293.7, 349.2), (196.0, 233.1, 293.7), (220.0, 277.2, 329.6)
+# Adventure: brisk and hopeful (lanterns, the car, the dungeon)
+save("filmAdventure", score(0.42, [Am, F, C, G],
+     [440, 523.3, 659.3, 0, 587.3, 523.3, 440, 0, 523.3, 659.3, 784, 0, 740, 587.3, 493.9, 0]))
+# Funny: bouncy and short (tomatoes, rats, the toy)
+save("filmFunny", score(0.34, [C, G, C, G],
+     [523.3, 0, 659.3, 523.3, 784, 0, 659.3, 0, 587.3, 0, 493.9, 587.3, 784, 740, 784, 0], lead="square", lead_vol=0.08, vib=0, staccato=True))
+# Mystery: slow and a little spooky (the owl, the night shift)
+save("filmMystery", score(0.78, [Dm, Bb, Gm, A],
+     [587.3, 0, 698.5, 0, 587.3, 554.4, 0, 0, 466.2, 0, 587.3, 0, 554.4, 0, 440, 0], lead="sine", lead_vol=0.13, arp=False, vib=6))
+# Cosy: warm and sleepy (Mom's kitchen, Auntie's cats)
+save("filmCosy", score(0.62, [F, C, Dm, C],
+     [698.5, 659.3, 523.3, 0, 659.3, 587.3, 523.3, 0, 587.3, 698.5, 880, 0, 784, 659.3, 523.3, 0], lead="sine", lead_vol=0.12, arp=False))
+# The lobby: an easy little tune while you choose
+save("filmLobby", score(0.5, [C, Am, Dm, G],
+     [659.3, 0, 784, 659.3, 523.3, 0, 440, 0, 587.3, 0, 698.5, 587.3, 493.9, 587.3, 392, 0], lead="tri", lead_vol=0.10))
 print("sounds written:", len(os.listdir(OUT)))
