@@ -1,9 +1,11 @@
 # Builds the app with Xcode on one of GitHub's Macs, to catch compile errors.
 # It builds for the iOS Simulator, so no signing or device is needed.
+# Runs on pushes to main (about a minute of Mac time each), or by hand from the Actions tab.
 name: Xcode build
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
