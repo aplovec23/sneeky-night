@@ -1,0 +1,28 @@
+# Builds the app with Xcode on one of GitHub's Macs, to catch compile errors.
+# It builds for the iOS Simulator, so no signing or device is needed.
+name: Xcode build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode on the runner
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project SneekyNight.xcodeproj -target SneekyNight -sdk iphonesimulator \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|warning: .*(will be an error|is unavailable)|BUILD" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Errors
+        if: failure()
+        run: grep -E "error:" build.log | sort -u | head -150
