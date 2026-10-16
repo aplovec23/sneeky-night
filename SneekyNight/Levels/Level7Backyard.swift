@@ -332,7 +332,7 @@ final class BackyardModel {
         engine.walking = false
         let run = self.run
         Task { @MainActor in
-            func wait(_ seconds: Double) async -> Bool {
+            @MainActor func wait(_ seconds: Double) async -> Bool {
                 try? await Task.sleep(for: .seconds(seconds))
                 return self.run == run
             }
