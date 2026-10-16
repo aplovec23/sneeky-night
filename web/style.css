@@ -151,7 +151,7 @@ label.set { display: flex; align-items: center; gap: 12px; font-weight: 700; fon
   display: flex; gap: 8px; align-items: center; background: rgba(0, 0, 0, .45); padding: 8px; border-radius: 16px;
 }
 .slot { width: 42px; height: 42px; border-radius: 12px; background: rgba(255, 255, 255, .12); display: flex; align-items: center; justify-content: center; font-size: 22px; }
-.corner-hint { position: absolute; left: 16px; bottom: 12px; }
+.corner-hint { position: absolute; right: 16px; top: 74px; font-size: 15px; }
 
 .controls {
   position: absolute; left: 0; right: 0; bottom: 0;
@@ -242,3 +242,61 @@ label.set { display: flex; align-items: center; gap: 12px; font-weight: 700; fon
   .round { width: 46px; height: 46px; font-size: 20px; }
   .title-pill, .pill { font-size: 15px; padding: 7px 12px; }
 }
+
+/* Mom's phone (Level 3) */
+.phone { width: min(380px, 80vw); height: min(640px, 86vh); background: #000; border-radius: 44px; padding: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.phone .phone-screen { height: 100%; border-radius: 34px; background: linear-gradient(#59338c, #264d99); color: #fff; padding: 26px 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; overflow: hidden; }
+.phone .lock { font-size: 30px; }
+.phone .msg { font-size: 22px; font-weight: 800; }
+.phone .dots { display: flex; gap: 14px; margin-bottom: 6px; }
+.phone .dots i { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.25); }
+.phone .dots i.on { background: #fff; }
+.phone .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 18px; }
+.phone .pad button { width: min(76px, 17vw); height: min(66px, 8.4vh); border-radius: 50%; border: 0; background: rgba(255,255,255,.2); color: #fff; font: 800 30px ui-rounded, system-ui; cursor: pointer; }
+.phone .clock { font-size: 56px; font-weight: 900; margin-top: 20px; }
+.phone .apps { display: grid; grid-template-columns: repeat(3, 92px); gap: 22px 10px; }
+.phone .apps button { background: none; border: 0; color: #fff; font: 700 15px ui-rounded, system-ui; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
+.phone .apps span { width: 66px; height: 66px; border-radius: 16px; display: grid; place-items: center; font-size: 32px; }
+.phone .apphead { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 22px; margin-top: 10px; }
+.phone .apphead button { background: none; border: 0; color: #fff; font: 700 20px ui-rounded, system-ui; cursor: pointer; }
+.phone .apphead span { width: 60px; }
+.phone .note { width: 100%; background: #fff2b3; color: #000; border-radius: 16px; padding: 20px; font-size: 20px; }
+.phone .note .code { font: 900 64px ui-monospace, monospace; }
+.phone .apptext { font-size: 22px; font-weight: 600; text-align: center; margin-top: 60px; white-space: pre-line; }
+
+/* The garden radar (Level 4) */
+.popup.radar { background: #141414; border: 3px solid rgba(52,199,89,.6); max-width: 760px; padding: 20px; }
+.radar .radar-title { font: 900 30px ui-monospace, monospace; color: #34c759; margin-bottom: 10px; }
+.radar canvas { width: min(696px, 82vw); height: auto; border: 2px solid #34c759; display: block; margin: 0 auto; }
+.radar .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 12px 0 6px; font: 600 14px ui-monospace, monospace; }
+.radar .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.radar .dad { font: 700 18px ui-monospace, monospace; margin-bottom: 14px; }
+
+/* Phones held upright: keep round buttons round and let the controls wrap instead of running off the edge. */
+.round { flex: none; }
+@media (max-width: 480px) {
+  .topbar { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .round { width: 40px; height: 40px; font-size: 17px; }
+  .title-pill { display: none; }
+  .controls { flex-wrap: wrap; justify-content: center; row-gap: 8px; padding-left: 10px; padding-right: 10px; }
+  .action.small { width: 42px; height: 42px; font-size: 16px; }
+  .joystick { width: 108px; height: 108px; }
+  .corner-hint { top: 64px; font-size: 12px; }
+  .levels { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* The hotel elevator (Level 5) */
+.popup.elevator { background: linear-gradient(#383838, #1f1f1f); border: 4px solid rgba(255,149,0,.7); width: 440px; max-width: 92vw; padding: 24px; }
+.popup.elevator.many { width: 520px; }
+.elevator b { font-size: 32px; }
+.elevator p { margin: 8px 0 16px; }
+.elevator .floors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; justify-items: center; }
+.elevator.many .floors { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.elevator .floors button { width: 74px; height: 74px; border-radius: 50%; border: 3px solid rgba(255,255,255,.5); background: linear-gradient(#5a5a5a, #3a3a3a); color: #fff; font: 900 28px ui-rounded, system-ui; cursor: pointer; }
+.elevator.many .floors button { width: 62px; height: 62px; font-size: 22px; }
+.elevator .floors button.here { background: #ff9500; color: #000; }
+@media (max-width: 480px) { .elevator .floors button { width: 58px; height: 58px; font-size: 22px; } .elevator.many .floors button { width: 46px; height: 46px; font-size: 17px; } }
+/* A long room title shrinks (with …) rather than pushing the buttons off the screen. */
+.topbar .title-pill { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.level.gated { cursor: pointer; color: rgba(255, 255, 255, .8); }
+.level .fee { font-size: 12px; font-weight: 900; color: #ffcc40; }

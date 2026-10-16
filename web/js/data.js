@@ -64,6 +64,12 @@ SN.boosts = [
   { id: 'arrow', name: 'Arrow', about: 'Dash ×1.9 and walking speed ×1.2', icon: '➶', color: '#ff9500' },
   { id: 'cloud', name: 'Cloud', about: 'Press X: fly for 10 seconds, over obstacles. 30 second cooldown.', icon: '☁️', color: SN.rgb(0.8, 0.92, 1) },
 ];
+/// Boosts nobody can find in a box: only a character hands them over. Auntie gives the Water Hose (Level 7).
+SN.specialBoosts = [
+  { id: 'waterHose', name: 'Water Hose', about: "Press J: spray whoever is chasing you so they can't see for 8 seconds (every 25). In Level 4 it waters five plants at once.", icon: '💧', color: SN.rgb(0.25, 0.70, 0.85) },
+];
+/// Every boost, findable or not (for the Customize screen and pop-ups).
+SN.allBoosts = () => SN.boosts.concat(SN.specialBoosts);
 
 /// [id, name, how to earn it]. "soon" badges can't be earned yet.
 SN.badges = [
@@ -94,11 +100,11 @@ SN.soonBadges = ['aprilFool', 'jolly'];
 SN.levels = [
   { id: 1, room: 'Bedroom', icon: '🛏', seconds: 100, ready: true },
   { id: 2, room: 'Hallway', icon: '🚪', seconds: 150, ready: true },
-  { id: 3, room: 'Downstairs', icon: '🪜', seconds: 200, ready: false },
-  { id: 4, room: 'Garden', icon: '🌿', seconds: 250, ready: false },
-  { id: 5, room: 'Street', icon: '🛣', seconds: 350, ready: false },
-  { id: 6, room: "Auntie's House", icon: '🐈', seconds: 400, ready: false },
-  { id: 7, room: "Auntie's Backyard", icon: '💧', seconds: 450, ready: false },
+  { id: 3, room: 'Downstairs', icon: '🪜', seconds: 200, ready: true },
+  { id: 4, room: 'Garden', icon: '🌿', seconds: 250, ready: true },
+  { id: 5, room: 'Street', icon: '🛣', seconds: 350, ready: true },
+  { id: 6, room: "Auntie's House", icon: '🐈', seconds: 400, ready: true },
+  { id: 7, room: "Auntie's Backyard", icon: '💧', seconds: 450, ready: true },
   { id: 8, room: 'Coming soon', icon: '🔒', seconds: 500, ready: false },
   { id: 9, room: 'Coming soon', icon: '🔒', seconds: 550, ready: false },
   { id: 10, room: 'Coming soon', icon: '🔒', seconds: 600, ready: false },

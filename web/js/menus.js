@@ -81,12 +81,12 @@ SN.menus = (function () {
     const owned = SN.accessories.filter(a => game.accessories.includes(a.id));
     section(`Accessories (find them in boxes!) ${owned.length}/${SN.accessories.length}`,
       [chip('None', () => !look.accessory, () => look.accessory = null)].concat(owned.map(a => chip(`${SN.accessoryIcon[a.family] || ''} ${a.name}`, () => look.accessory === a.id, () => look.accessory = a.id))));
-    const boosts = SN.boosts.filter(b => game.boosts.includes(b.id));
+    const boosts = SN.allBoosts().filter(b => game.boosts.includes(b.id));
     if (boosts.length) section('Boosts (they stack)', boosts.map(b => chip(`${b.icon} ${b.name}: ${look.boosts.includes(b.id) ? 'ON' : 'OFF'}`, () => look.boosts.includes(b.id),
       () => look.boosts = look.boosts.includes(b.id) ? look.boosts.filter(x => x !== b.id) : look.boosts.concat([b.id]))));
     const render = () => {
       opts.querySelectorAll('.chip, .swatch').forEach(b => { if (b._on) b.classList.toggle('on', b._on()); });
-      opts.querySelectorAll('.chip').forEach(b => { const m = b.textContent.match(/^(.*): (ON|OFF)$/); if (m) { const boost = SN.boosts.find(x => b.textContent.includes(x.name)); if (boost) b.textContent = `${boost.icon} ${boost.name}: ${look.boosts.includes(boost.id) ? 'ON' : 'OFF'}`; } });
+      opts.querySelectorAll('.chip').forEach(b => { const m = b.textContent.match(/^(.*): (ON|OFF)$/); if (m) { const boost = SN.allBoosts().find(x => b.textContent.includes(x.name)); if (boost) b.textContent = `${boost.icon} ${boost.name}: ${look.boosts.includes(boost.id) ? 'ON' : 'OFF'}`; } });
     };
     const cv = el.querySelector('[data-preview]');
     const draw = () => {
@@ -110,16 +110,36 @@ SN.menus = (function () {
 
   function levels(game, go, { onPick }) {
     const el = SN.el(`<div class="screen">${back}<h1>Levels</h1>
-      <p class="lead">${game.nextLevel ? 'Win each level to unlock the next one.' : 'You won every level so far! More rooms are coming to the web version soon.'}</p>
+      <p class="lead">${game.nextLevel ? 'Win each level to unlock the next one.' : SN.levels.some(l => l.ready && !game.completedLevels.includes(l.id)) ? 'Level 7 has an entry fee: tap it to see what it needs.' : 'You won every level so far! More rooms are coming to the web version soon.'}</p>
       <div class="levels"></div></div>`);
     const grid = el.querySelector('.levels');
+    const G = SN.GameState;
     SN.levels.forEach(l => {
       const open = game.isUnlocked(l), done = game.completedLevels.includes(l.id);
-      const b = SN.el(`<button class="level press ${open ? '' : 'locked'}"><span class="num">${l.id}</span><span>${open ? l.icon : '🔒'}</span>
-        <span>${l.ready ? l.room : 'Coming soon'}</span>${done ? '<span class="star">★</span>' : ''}</button>`);
+      // Level 7 after Level 6: open the gate (badges and orbs) instead.
+      const gated = l.id === 7 && l.ready && !open && game.completedLevels.includes(6);
+      const b = SN.el(`<button class="level press ${open ? '' : 'locked'} ${gated ? 'gated' : ''}"><span class="num">${l.id}</span><span>${open ? l.icon : gated ? '🔓' : '🔒'}</span>
+        <span>${l.ready ? l.room : 'Coming soon'}</span>${gated ? `<small class="fee">${G.level7Badges} badges · ${G.level7Price} orbs</small>` : ''}${done ? '<span class="star">★</span>' : ''}</button>`);
       if (open) b.addEventListener('click', () => { SN.sound.tap(); onPick(l.id); });
+      if (gated) b.addEventListener('click', () => { SN.sound.tap(); el.appendChild(gate()); });
       grid.appendChild(b);
     });
+    /// Level 7 is the first level with an entry fee: 32 badges, and 10 orbs paid once.
+    const gate = () => {
+      const ready = game.level7Requirements.every(r => r[1]);
+      const g = SN.el(`<div class="overlay"><div class="popup" style="text-align:left;max-width:620px">
+        <h2>💧 Level 7 · Auntie's Backyard</h2>
+        <p>Auntie's backyard is behind a gate. To get in you need:</p>
+        ${game.level7Requirements.map(([text, met]) => `<p style="margin:4px 0;font-size:20px">${met ? '✅' : '⚪️'} ${SN.esc(text)}</p>`).join('')}
+        <p style="font-size:15px;opacity:.65;margin-top:10px">Orbs come from the dungeon (Side Level 2) and the cinema (Side Level 4).</p>
+        <div class="row" style="justify-content:flex-start;gap:12px"><button class="big press" data-g="no" style="background:#8e8e93">Not now</button>
+        ${ready ? `<button class="big press" data-g="pay">Pay ${G.level7Price} orbs</button>` : ''}</div></div></div>`);
+      g.querySelector('[data-g="no"]').addEventListener('click', () => { SN.sound.tap(); g.remove(); });
+      const pay = g.querySelector('[data-g="pay"]');
+      if (pay) pay.addEventListener('click', () => { if (game.payForLevel7()) { SN.sound.play('unlock'); g.remove(); onPick(7); } });
+      g.addEventListener('click', ev => { if (ev.target === g) g.remove(); });
+      return g;
+    };
     return wire(el, go);
   }
 
@@ -200,7 +220,7 @@ SN.menus = (function () {
       <div class="card"><h3>Sneeky Night for the web</h3>
         <p>This is the web version of Sneeky Night. It runs in any browser: on a computer, a tablet or a phone.</p>
         <p><b>Keyboard:</b> W A S D or the arrows to walk · E use · Space jump · C crouch · R carry · T taunt · Q dash · Shift run · V F G B X items · P pause · L hint · N restart · M menu</p>
-        <p>It's being rebuilt level by level. So far: Levels 1 and 2, Customize Character, badges, save files, difficulty and settings. Saves are kept in this browser only.</p></div></div>`);
+        <p>It's being rebuilt level by level. So far: Levels 1 to 7 (with the Roof), Customize Character, badges, save files, difficulty and settings. Saves are kept in this browser only.</p></div></div>`);
     return wire(el, go);
   }
 

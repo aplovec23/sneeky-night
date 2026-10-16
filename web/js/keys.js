@@ -4,12 +4,12 @@ SN.keys = {
   up: ['KeyW', 'W'], left: ['KeyA', 'A'], down: ['KeyS', 'S'], right: ['KeyD', 'D'],
   use: ['KeyE', 'E'], jump: ['Space', 'Space'], carry: ['KeyR', 'R'], crouch: ['KeyC', 'C'], taunt: ['KeyT', 'T'],
   dash: ['KeyQ', 'Q'], run: ['ShiftLeft', 'Shift'],
-  vines: ['KeyV', 'V'], lightning: ['KeyF', 'F'], toy: ['KeyG', 'G'], bat: ['KeyB', 'B'], cloud: ['KeyX', 'X'],
+  vines: ['KeyV', 'V'], lightning: ['KeyF', 'F'], toy: ['KeyG', 'G'], bat: ['KeyB', 'B'], cloud: ['KeyX', 'X'], hose: ['KeyJ', 'J'],
   pause: ['KeyP', 'P'], menu: ['KeyM', 'M'], restart: ['KeyN', 'N'], hint: ['KeyL', 'L'],
 };
 /// Extra keys that do the same job: arrows walk too, Esc pauses, either Shift runs.
 SN.keyAliases = { ArrowUp: 'up', ArrowLeft: 'left', ArrowDown: 'down', ArrowRight: 'right', Escape: 'pause', ShiftRight: 'run', Enter: 'use' };
-SN.items = ['vines', 'lightning', 'toy', 'bat', 'cloud'];
+SN.items = ['vines', 'lightning', 'toy', 'bat', 'cloud', 'hose'];
 SN.label = name => SN.keys[name][1];
 
 /// What's held down right now, and what was pressed since the last frame.

@@ -314,6 +314,11 @@
     }
     if (shown.includes('leaf')) D.rotated(ctx, 26, 70, -30, () => D.ellipse(ctx, 0, 0, 12, 22, '#34c759'));
     if (shown.includes('cloud')) { D.ellipse(ctx, 92, 14, 30, 11, '#fff'); D.circle(ctx, 86, 9, 14, '#fff'); D.circle(ctx, 96, 7, 17, '#fff'); }
+    if (shown.includes('waterHose')) {
+      // Auntie's green hose, coiled over one shoulder, with its brass nozzle
+      D.circle(ctx, 38, 78, 26, null, SN.rgb(0.20, 0.62, 0.30), 4); D.circle(ctx, 38, 78, 18, null, SN.rgb(0.20, 0.62, 0.30), 4);
+      D.rotated(ctx, 48, 92, 30, () => D.capsule(ctx, 0, 0, 6, 12, SN.colors.gold));
+    }
     if (shown.includes('lightningBall')) {
       ctx.save(); ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 8; D.circle(ctx, 14, 40, 22, '#ffcc00'); ctx.restore();
       D.bolt(ctx, 14, 40, 16, '#fff');
@@ -347,6 +352,8 @@
       D.rect(ctx, 70, 170, 84, 10, SN.rgb(0.7, 0.3, 0.45));
       D.capsule(ctx, 48, 248 + swing * 4, 30, 14, '#fff'); D.capsule(ctx, 92, 248 - swing * 4, 30, 14, '#fff');
       D.circle(ctx, 70, 68, 62, skin);
+      // Auntie: a grey bun on top
+      if (o.bun) D.circle(ctx, 62, 30, 36, SN.white(0.78));
       D.dome(ctx, 70, 64, 68, 68, o.hair || SN.rgb(0.45, 0.28, 0.15));
       if (!o.noCurlers) [46, 62, 78, 94].forEach(cx => D.capsule(ctx, cx, 30, 12, 18, '#32ade6'));
       D.rotated(ctx, 58, 60, 15, () => D.capsule(ctx, 0, 0, 14, 3, '#000'));
@@ -355,8 +362,14 @@
       D.capsule(ctx, 59, 68, 7, blink ? 1.5 : 7, '#111'); D.capsule(ctx, 81, 68, 7, blink ? 1.5 : 7, '#111');
       D.capsule(ctx, 70, 84, 18, 4, 'rgba(0,0,0,.7)');
       if (o.stunned) stunStars(ctx, 70, 18, t);
-      else if (!o.calm) D.text(ctx, '?!', 120, 22, 30, '#ffcc00', 900);
+      else if (!o.calm) label(ctx, '?!', 120, 22, 30, '#ffcc00');
     });
+  }
+
+  /// Text inside a grown-up's flipped frame: drawn the right way round even when they face left.
+  function label(ctx, s, cx, cy, size, fill) {
+    if (ctx.getTransform().a >= 0) { D.text(ctx, s, cx, cy, size, fill, 900); return; }
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(-1, 1); D.text(ctx, s, 0, 0, size, fill, 900); ctx.restore();
   }
 
   function dad(ctx, x, y, o = {}) {
@@ -381,9 +394,9 @@
       const blink = (t + 2.1) % 3.6 < 0.16;
       D.capsule(ctx, 60, 60, 6, blink ? 1.5 : 6, '#111'); D.capsule(ctx, 82, 60, 6, blink ? 1.5 : 6, '#111');
       D.capsule(ctx, 71, 76, 28, 8, SN.rgb(0.3, 0.2, 0.12));
-      if (o.laughing) D.text(ctx, 'Ha ha!', 120, 18, 22, '#ffcc00', 900);
+      if (o.laughing) label(ctx, 'Ha ha!', 120, 18, 22, '#ffcc00');
       else if (o.stunned) stunStars(ctx, 70, 12, t);
-      else if (!o.calm) D.text(ctx, 'Hmm?', 120, 18, 22, '#ffcc00', 900);
+      else if (!o.calm) label(ctx, 'Hmm?', 120, 18, 22, '#ffcc00');
     });
   }
 

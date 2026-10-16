@@ -359,6 +359,7 @@ SN.ItemBelt = class {
     if (game.hasToy) this.owned.push('toy');
     if (game.hasBat) this.owned.push('bat');
     if (game.boosts.includes('cloud') && this.boosts.includes('cloud')) this.owned.push('cloud');
+    if (game.boosts.includes('waterHose') && this.boosts.includes('waterHose')) this.owned.push('hose');
     this.apply();
   }
   reset() { this.cooldowns = {}; this.lightningLeft = 0; this.apply(); }
@@ -379,6 +380,10 @@ SN.ItemBelt = class {
       if (!e.running) return;
       this.lightningLeft = 25; this.cooldowns.lightning = 85;
       SN.sound.play('powerup'); e.say('LIGHTNING POWER!', 1.5); this.apply();
+    } else if (item === 'hose') {
+      // A blast of water in the face: whoever is chasing you can't see for 8 seconds. Ready again after 25.
+      if (this.stun(8, false)) { this.cooldowns.hose = 25; SN.sound.play('water'); e.say("SPLASH! Can't see me now!", 1.5); }
+      else e.say('There\'s nobody here to spray.');
     } else if (item === 'cloud') {
       if (!e.running || e.hidden) return;
       e.fly(10); this.cooldowns.cloud = 40;
@@ -399,5 +404,5 @@ SN.ItemBelt = class {
 };
 SN.itemInfo = {
   vines: { icon: '🌿', color: '#34c759' }, lightning: { icon: '⚡', color: '#ffcc00' }, toy: { icon: '🧸', color: '#ff2d55' },
-  bat: { icon: '🏏', color: '#ff9500' }, cloud: { icon: '☁️', color: '#73b3ff' },
+  bat: { icon: '🏏', color: '#ff9500' }, cloud: { icon: '☁️', color: '#73b3ff' }, hose: { icon: '💧', color: '#40b3d9' },
 };

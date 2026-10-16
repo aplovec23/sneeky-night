@@ -22,6 +22,7 @@ SN.GameState = class {
     this.retryCount = data.retryCount || 0;
     this.gifts = data.gifts || [];
     this.orbs = data.orbs || 0;
+    this.paidLevels = data.paidLevels || [];
     this.onToast = () => {};
   }
 
@@ -33,7 +34,7 @@ SN.GameState = class {
   save() {
     const out = {};
     ['playerName', 'look', 'hasCharacter', 'completedLevels', 'completedSide', 'skills', 'badges', 'accessories', 'boosts',
-     'hasVines', 'hasToy', 'hasBat', 'extraColors', 'caughtCount', 'retryCount', 'gifts', 'orbs'].forEach(k => out[k] = this[k]);
+     'hasVines', 'hasToy', 'hasBat', 'extraColors', 'caughtCount', 'retryCount', 'gifts', 'orbs', 'paidLevels'].forEach(k => out[k] = this[k]);
     try { localStorage.setItem(SN.GameState.key(this.slot), JSON.stringify(out)); } catch (e) { /* storage full or private mode */ }
   }
 
@@ -88,7 +89,28 @@ SN.GameState = class {
   }
 
   // ---------- Levels and loot ----------
-  isUnlocked(level) { return level.ready && (level.id === 1 || this.completedLevels.includes(level.id - 1)); }
+  /// You can only play a level once you've won the one before it. Level 7 also needs 32 badges
+  /// and 10 orbs paid at the gate (once).
+  isUnlocked(level) {
+    if (!level.ready || !(level.id === 1 || this.completedLevels.includes(level.id - 1))) return false;
+    return level.id !== 7 || (this.badges.length >= SN.GameState.level7Badges && this.paidLevels.includes(7));
+  }
+  /// What Level 7 needs, for the Levels screen.
+  get level7Requirements() {
+    const G = SN.GameState;
+    return [['Win Level 6', this.completedLevels.includes(6)],
+            [`Earn ${G.level7Badges} badges (${Math.min(this.badges.length, G.level7Badges)}/${G.level7Badges})`, this.badges.length >= G.level7Badges],
+            [`Pay ${G.level7Price} orbs (you have ${this.orbs})`, this.paidLevels.includes(7) || this.orbs >= G.level7Price]];
+  }
+  /// Pays Level 7's entry. False if you can't yet (not enough orbs or badges, or Level 6 not won).
+  payForLevel7() {
+    const G = SN.GameState;
+    if (this.paidLevels.includes(7) || !this.completedLevels.includes(6) || this.badges.length < G.level7Badges || this.orbs < G.level7Price) return false;
+    this.orbs -= G.level7Price;
+    this.paidLevels.push(7);
+    this.save();
+    return true;
+  }
   get nextLevel() {
     const l = SN.levels.find(l => l.ready && !this.completedLevels.includes(l.id) && this.isUnlocked(l));
     return l ? l.id : null;
@@ -113,7 +135,14 @@ SN.GameState = class {
     if (SN.randInt(0, 5) === 0 && newItems.length) return { type: 'accessory', item: SN.pick(newItems) };
     return null;
   }
+  /// A boost you don't have yet (the roof and the garden's radar hand these out), or null.
+  newBoost() { const left = SN.boosts.filter(b => !this.boosts.includes(b.id)); return left.length ? SN.pick(left) : null; }
   take(loot) {
+    if (loot.type === 'boost' && SN.specialBoosts.some(b => b.id === loot.boost.id)) {
+      if (!this.boosts.includes(loot.boost.id)) { this.boosts.push(loot.boost.id); this.look.boosts.push(loot.boost.id); }
+      this.save();
+      return;
+    }
     if (loot.type === 'accessory') { this.accessories.push(loot.item.id); this.award('coolCap'); }
     if (loot.type === 'boost') { this.boosts.push(loot.boost.id); this.look.boosts.push(loot.boost.id); }
     if (loot.type === 'bat') this.hasBat = true;
@@ -121,6 +150,9 @@ SN.GameState = class {
     if (SN.boosts.every(b => this.boosts.includes(b.id)) && this.hasVines && this.hasToy && this.hasBat) this.award('unstoppable');
   }
 };
+
+SN.GameState.level7Badges = 32;
+SN.GameState.level7Price = 10;
 
 /// The pop-up shown when a search finds something.
 SN.lootPopup = function (loot, take) {
