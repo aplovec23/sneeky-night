@@ -7,12 +7,12 @@ import Observation
 @Observable
 final class ItemBelt {
     enum Item: Int, CaseIterable {
-        case vines, lightning, toy, bat, cloud, hat
+        case vines, lightning, toy, bat, cloud, hat, hose
 
         /// The letter on the button, from the one list of keys in `GameKey`.
         var key: String { GameKey.items[rawValue].label }
-        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill"][rawValue] }
-        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color][rawValue] }
+        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill", "drop.fill"][rawValue] }
+        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color, Boost.waterHose.color][rawValue] }
     }
 
     var owned: Set<Item> = []
@@ -40,6 +40,7 @@ final class ItemBelt {
         if game.hasBat { owned.insert(.bat) }
         if boosts.contains(.lightningBall) { owned.insert(.lightning) }
         if boosts.contains(.cloud) { owned.insert(.cloud) }
+        if boosts.contains(.waterHose) { owned.insert(.hose) }
         if boosts.contains(.guidesHat) { owned.insert(.hat) }
         hatOn = false
         upgrades = game.upgrades
@@ -118,6 +119,15 @@ final class ItemBelt {
             Sound.magic.play()
             engine.say(hatOn ? "The Guide's Hat! I feel ×10.5 stronger!" : "Hat power off.", seconds: 1.5)
             apply()
+        case .hose:
+            // A blast of water in the face: whoever is chasing you can't see for 8 seconds. Ready again after 25.
+            if stun(8, false) {
+                cooldowns[.hose] = 25
+                Sound.water.play()
+                engine.say("SPLASH! Can't see me now!", seconds: 1.5)
+            } else {
+                engine.say("There's nobody here to spray.")
+            }
         case .lightning:
             guard engine.running else { return }
             lightningLeft = 25

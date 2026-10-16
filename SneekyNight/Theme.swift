@@ -1,8 +1,10 @@
 import SwiftUI
 
 extension Font {
+    /// The game's lettering: a clean, slightly condensed-looking face rather than the old bubbly rounded one.
+    /// Very heavy weights are eased back a step so big titles look less like a toy box.
     static func game(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .system(size: size, weight: weight == .heavy ? .bold : weight == .bold ? .semibold : weight, design: .default)
     }
 }
 

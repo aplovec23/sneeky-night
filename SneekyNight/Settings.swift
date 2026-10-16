@@ -20,6 +20,36 @@ final class Settings {
 
     var timeZone: TimeZone { TimeZone(identifier: timeZoneID) ?? .current }
 
+    /// The time of day right now in the chosen time zone, in hours with a fraction (13.5 = half past one).
+    var localTime: Double {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let parts = calendar.dateComponents([.hour, .minute, .second], from: Date())
+        return Double(parts.hour ?? 0) + Double(parts.minute ?? 0) / 60 + Double(parts.second ?? 0) / 3600
+    }
+
+    /// Where the sun (or the moon at night) is in the menu's sky: `across` goes 0 (rising, left)
+    /// to 1 (setting, right), `height` 0 (on the horizon) to 1 (high up). With the real clock it
+    /// moves all day: the sun comes up slowly from 5 o'clock and goes down slowly until 7 in the evening.
+    var skyBody: (across: Double, height: Double, sun: Bool) {
+        if skyOverride == nil && skyMode == 2 {
+            let h = localTime
+            if h >= 5 && h < 19 {
+                let p = (h - 5) / 14
+                return (p, sin(p * .pi), true)
+            }
+            // The moon crosses the night sky from 7 in the evening to 5 in the morning.
+            let p = (h >= 19 ? h - 19 : h + 5) / 10
+            return (p, sin(p * .pi) * 0.85, false)
+        }
+        switch sky {
+        case .night: return (0.4, 0.85, false)
+        case .dawn: return (0.12, 0.22, true)
+        case .day: return (0.5, 1, true)
+        case .dusk: return (0.88, 0.2, true)
+        }
+    }
+
     /// The hour (0–23) right now in the chosen time zone.
     var localHour: Int {
         var calendar = Calendar(identifier: .gregorian)
@@ -38,6 +68,8 @@ final class Settings {
     }
     /// The difficulty mode (a `Difficulty` raw value; 1 = Mild).
     var difficulty: Int { didSet { save() } }
+    /// The song that plays: 0–4 from `Song.names`, or `Song.own` for your own song.
+    var song: Int { didSet { save(); if song != oldValue { SoundPlayer.shared.restartMusic() } } }
     /// 0 = small, 1 = normal, 2 = big joystick and buttons.
     var controlSize: Int { didSet { save() } }
     /// Joystick on the right and buttons on the left.
@@ -61,6 +93,7 @@ final class Settings {
         timeZoneID = d.string(forKey: "set.timeZone") ?? TimeZone.current.identifier
         practice = flag("set.practice", false)
         difficulty = d.object(forKey: "set.difficulty") == nil ? 1 : d.integer(forKey: "set.difficulty")
+        song = d.integer(forKey: "set.song")
         controlSize = d.object(forKey: "set.controlSize") == nil ? 1 : d.integer(forKey: "set.controlSize")
         swapSides = flag("set.swapSides", false)
         haptics = flag("set.haptics", true)
@@ -77,6 +110,7 @@ final class Settings {
         d.set(timeZoneID, forKey: "set.timeZone")
         d.set(practice, forKey: "set.practice")
         d.set(difficulty, forKey: "set.difficulty")
+        d.set(song, forKey: "set.song")
         d.set(controlSize, forKey: "set.controlSize")
         d.set(swapSides, forKey: "set.swapSides")
         d.set(haptics, forKey: "set.haptics")

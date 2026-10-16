@@ -159,6 +159,8 @@ final class GameEngine {
     var maxHP: Double = 100
     /// Just got hurt: flashing, and can't be hurt again for a moment.
     var hurt = false
+    /// How worried your character looks: 0 nobody about, 1 someone is looking for you, 2 they're close. Set by the chase.
+    var threat = 0
     var godMode = false
 
     /// Riding the cloud: up in the air, over hedges and obstacles.

@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 
 /// The top of every extra menu screen: back button and a big title.
 private struct MenuHeader: View {
@@ -35,6 +37,9 @@ struct SettingsView: View {
                             slider("Master volume", "speaker.wave.3.fill", $settings.master)
                             slider("Music volume", "music.note", $settings.music)
                             slider("Sound effects", "bell.fill", $settings.effects)
+                        }
+                        group("Song") {
+                            SongPicker()
                         }
                         group("Time of day") {
                             picker("The game's sky", ["Night", "Early morning", "Real time"], $settings.skyMode)
@@ -124,6 +129,91 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Song
+
+/// Pick one of the game's five songs, or bring your own: a video from the photo gallery (its sound
+/// is used) or a song from the Files app.
+struct SongPicker: View {
+    @Bindable private var settings = Settings.shared
+    @State private var videoPick: PhotosPickerItem?
+    @State private var filesOpen = false
+    @State private var note = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(170), spacing: 10), count: 4), alignment: .leading, spacing: 10) {
+                ForEach(Song.names.indices, id: \.self) { i in
+                    choice(Song.names[i], "music.note", on: settings.song == i) { settings.song = i }
+                }
+                if Song.ownFile != nil {
+                    choice("My own song", "star.fill", on: settings.song == Song.own) { settings.song = Song.own }
+                }
+            }
+            HStack(spacing: 12) {
+                PhotosPicker(selection: $videoPick, matching: .videos) {
+                    Label("From my gallery", systemImage: "photo.on.rectangle.angled")
+                        .font(.game(18)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Palette.button.gradient, in: Capsule())
+                }
+                Button {
+                    SoundPlayer.shared.tap()
+                    filesOpen = true
+                } label: {
+                    Label("From Files", systemImage: "folder.fill")
+                        .font(.game(18)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(.white.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+            Text(note.isEmpty ? "A video from your gallery plays its sound. Songs from Files can be MP3, M4A or WAV." : note)
+                .font(.game(15, .semibold))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+        .onChange(of: videoPick) { _, item in
+            guard let item else { return }
+            note = "Loading..."
+            Task {
+                if let video = try? await item.loadTransferable(type: PickedVideo.self), Song.keepOwn(video.url) {
+                    try? FileManager.default.removeItem(at: video.url)
+                    useOwnSong()
+                } else {
+                    note = "That video couldn't be used. Try another one."
+                }
+                videoPick = nil
+            }
+        }
+        .fileImporter(isPresented: $filesOpen, allowedContentTypes: [.audio]) { result in
+            guard case .success(let url) = result else { return }
+            let allowed = url.startAccessingSecurityScopedResource()
+            defer { if allowed { url.stopAccessingSecurityScopedResource() } }
+            if Song.keepOwn(url) { useOwnSong() } else { note = "That song couldn't be used. Try another one." }
+        }
+    }
+
+    private func useOwnSong() {
+        note = "Playing your own song!"
+        if settings.song == Song.own { SoundPlayer.shared.restartMusic() } else { settings.song = Song.own }
+    }
+
+    private func choice(_ title: String, _ symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            SoundPlayer.shared.tap()
+            action()
+        } label: {
+            Label(title, systemImage: symbol)
+                .font(.game(17))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundStyle(on ? .black : .white)
+                .frame(width: 170, height: 44)
+                .background(on ? AnyShapeStyle(Palette.gold) : AnyShapeStyle(.white.opacity(0.12)), in: Capsule())
+        }
+        .buttonStyle(PressableStyle())
+    }
+}
+
 // MARK: - Side levels
 
 struct SideLevelsView: View {
@@ -139,20 +229,27 @@ struct SideLevelsView: View {
                 Text("Extra places off the main path. Most of them need a few things first.")
                     .font(.game(22, .semibold))
                     .foregroundStyle(.white.opacity(0.8))
-                LazyVGrid(columns: [GridItem(.fixed(548), spacing: 16, alignment: .top), GridItem(.fixed(548), spacing: 16, alignment: .top)], spacing: 16) {
-                    card(1, "The Other Hallway", "signpost.right.fill",
-                         "The hallway behind your room. Find the 5 keys hidden in the boxes to open the other door. Boosts turn up a little more often here!",
-                         game.sideLevelRequirements)
-                    card(2, "The Dungeon", "diamond.fill",
-                         "Mine glowing orbs and spend them on upgrades (speed goes up to ×5.7!), accessories and demo-only exclusives. It never ends, but the quest board has a quest.",
-                         game.dungeonRequirements)
-                    card(3, "Uncle's Car", "car.fill",
-                         "Hop into Uncle's car behind the hotel and ride to the city where Auntie lives. She knows where Grandpa is. Still in the car after 10 minutes? You'll see a little of Level 6.",
-                         game.carRequirements)
-                    card(4, "The Cinema", "popcorn.fill",
-                         "Pick a seat and watch a show. There are 10, each one hour long, and your place is kept if you leave. Every show you watch to the end pays 1000 orbs.",
-                         [])
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(548), spacing: 16, alignment: .top), GridItem(.fixed(548), spacing: 16, alignment: .top)], spacing: 16) {
+                        card(1, "The Other Hallway", "signpost.right.fill",
+                             "The hallway behind your room. Find the 5 keys hidden in the boxes to open the other door. Boosts turn up a little more often here!",
+                             game.sideLevelRequirements)
+                        card(2, "The Dungeon", "diamond.fill",
+                             "Mine glowing orbs and spend them on upgrades (speed goes up to ×5.7!), accessories and demo-only exclusives. It never ends, but the quest board has a quest.",
+                             game.dungeonRequirements)
+                        card(3, "Uncle's Car", "car.fill",
+                             "Hop into Uncle's car behind the hotel and ride to the city where Auntie lives. She knows where Grandpa is. Still in the car after 10 minutes? You'll see a little of Level 6.",
+                             game.carRequirements)
+                        card(4, "The Cinema", "popcorn.fill",
+                             "Pick a seat and watch a show. There are 10, each one hour long, and your place is kept if you leave. Every show you watch to the end pays 1000 orbs.",
+                             [])
+                        card(5, "Dreams", "moon.zzz.fill",
+                             "You fell asleep. Every dream is different: a random room, random keys, hazards and dream people. Find every key and get out of the door to wake up.",
+                             game.dreamRequirements)
+                    }
+                    .padding(.bottom, 20)
                 }
+                .scrollIndicators(.hidden)
                 Spacer()
             }
             .padding(30)
@@ -356,6 +453,7 @@ struct CreativeSwitch: View {
 struct MultiplayerView: View {
     @Environment(GameState.self) private var game
     let onBack: () -> Void
+    var onCustomize: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -364,13 +462,14 @@ struct MultiplayerView: View {
                 MenuHeader(title: "Multiplayer", onBack: onBack)
                 HStack(spacing: 30) {
                     CharacterView(look: game.look, facingRight: true).scaleEffect(1.3).frame(width: 130, height: 210)
-                    PlayerTwoSprite(engine: GameEngine(), firstLook: game.look).scaleEffect(1.3).frame(width: 130, height: 240)
+                    PlayerTwoSprite(engine: GameEngine()).scaleEffect(1.3).frame(width: 130, height: 240)
                 }
+                MenuButton(title: "Customize player 2", symbol: "tshirt.fill", color: .orange, action: onCustomize)
                 Text("Two players, one \(Device.isPhone ? "iPhone" : "iPad")")
                     .font(.game(30, .heavy))
                     .foregroundStyle(.white)
                 VStack(alignment: .leading, spacing: 10) {
-                    line("gamecontroller.fill", "Player 2 gets a small orange joystick and an orange hand button, next to player 1's joystick.")
+                    line("gamecontroller.fill", "Player 1's joystick is on the left of the screen; player 2 gets an orange joystick and hand button on the right.")
                     line("keyboard.fill", "With a keyboard: player 1 uses W A S D, player 2 uses the arrow keys and Return.")
                     line("hand.raised.fill", "Player 2 can search boxes, open drawers and doors, and pick things up for the team.")
                     line("eye.fill", "Mom and Dad chase player 1. Only player 1 can hide, jump and use items.")
@@ -456,6 +555,12 @@ struct LoreView: View {
          "Lives by the chimney on the roof. It winks at you. Nobody knows why."),
         ("Level Maker friends", "hammer.fill", .purple,
          "Uncle, a Friend, a friendly Ghost, the Guide, Guards and Workers can only be placed in your own levels. Give each of them their own line."),
+        ("Auntie's kittens", "cat.fill", .orange,
+         "Auntie's newest litter. They slip out of their pen at the first splash of the hose, and they love bushes, sheds and old doghouses."),
+        ("Dream people", "moon.zzz.fill", .purple,
+         "Faces from your own dreams (Side Level 5). They say strange things, and they're never in the same place twice."),
+        ("Player 2", "person.2.fill", .orange,
+         "Your partner in sneaking. In multiplayer they have their own look and name (Multiplayer → Customize player 2)."),
     ]
 
     /// Permanent items, keys and things you pick up.
@@ -488,6 +593,8 @@ struct LoreView: View {
          "Next to the toy chest in your brother's room. Grab a sheet and draw whatever you like; the game stops while you draw."),
         ("The hotel elevator", "arrow.up.arrow.down.square.fill", .orange,
          "Ten floor buttons and no hints. Uncle's room could be on any of them."),
+        ("Water spray (J)", "drop.fill", Boost.waterHose.color,
+         "From Auntie's Water Hose. Spray whoever is chasing you so they can't see for 8 seconds; ready again after 25."),
     ]
 
     var body: some View {
@@ -528,6 +635,8 @@ struct LoreView: View {
         list.append(game.boosts.contains(.guidesHat)
             ? (Boost.guidesHat.name + "  ✓", Boost.guidesHat.symbol, Boost.guidesHat.color, "Boost. \(Boost.guidesHat.about) The chance of finding it is exactly zero. Yours was a gift.")
             : ("???", "questionmark", GuidesHat.color, "A boost that can't be found, bought or won. The chance is exactly zero. Only the Guide knows who gets one."))
+        list.append((Boost.waterHose.name + (game.boosts.contains(.waterHose) ? "  ✓" : ""), Boost.waterHose.symbol, Boost.waterHose.color,
+                     "Boost, only in Level 7: Auntie gives it to you. \(Boost.waterHose.about)"))
         var families: [Accessory.Family] = []
         for item in Accessory.all where !families.contains(item.family) { families.append(item.family) }
         for family in families {
@@ -756,6 +865,7 @@ enum ItemLore {
         "Orbs": "They grow inside the dungeon rocks like pearls in a shell. The shopkeeper says the first one was found by a lost miner's lantern.",
         "The golden stick": "Nobody made it and nobody has found it twice. Some say the owl drops it. The owl isn't saying.",
         "The hotel elevator": "Built the same year as the hotel. Uncle swears it rearranges the floors when nobody is looking.",
+        "Water spray (J)": "Auntie's hose has watered her backyard for thirty years. It sprays harder than it looks.",
         "Drawing paper": "Auntie posts your brother a fresh pad every birthday. He draws on the first page and saves the rest \"for something important\".",
         "Glasses": "Lost and found: every pair was left behind by a visitor and forgotten in a box.",
         "Crown": "Cut from a cereal box for a school play. It was never returned.",
@@ -779,9 +889,41 @@ enum ItemLore {
 
 struct UpdateLogView: View {
     let onBack: () -> Void
+    /// Nil shows everything; otherwise only the notes in one of `categories`.
+    @State private var category: String?
+
+    static let categories = ["Levels", "Characters", "Items", "Modes & menus", "Fixes"]
+
+    /// Which category a note belongs to, from the words in it.
+    static func category(of note: String) -> String {
+        let text = note.lowercased()
+        func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
+        if has(["fixed", "fix ", "smoother", "slightly smaller"]) { return "Fixes" }
+        if has(["boost", "item", "accessor", "bat", "vines", "orb", "hat", "hose", "toy", "slippers"]) { return "Items" }
+        if has(["level", "room", "hotel", "maze", "dungeon", "cinema", "roof", "garden", "backyard", "dream"]) { return "Levels" }
+        if has(["hair", "customize", "character", "mom", "dad", "brother", "guide", "face", "t-shirt", "auntie", "uncle", "player 2"]) { return "Characters" }
+        return "Modes & menus"
+    }
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Sneeky Nights: Auntie's backyard", [
+            "Level 7: Auntie's Backyard. The first level with an entry fee: 32 badges, and 10 orbs paid at the gate. Wash the mud off the yard with the hose, then find every missing kitten.",
+            "Auntie thanks you with a new boost only she gives: the Water Hose. Press J to spray whoever is chasing you so they can't see. In Level 4 it waters five plants at once.",
+            "Then Auntie walks you to Uncle's car, in a short scene.",
+            "New side level: Dreams. Every dream is random: a new room, keys, hazards and dream people each time. Win every level to open it.",
+            "Customize Character has categories now (Body, Hair, Clothes, Accessories, Boosts, Extras) and lots more to pick: eye colour, trousers, shoes, hoodies, stripes and jackets, freckles, rosy cheeks and your usual face.",
+            "Put your own picture on your T-shirt: pick a photo from your gallery.",
+            "Characters show how they feel: worried when someone is looking for you, scared when they're close, surprised in the air, sneaky when crouching.",
+            "Characters are more alive: they breathe, sway, glance around and bob as they walk. Mom, Dad and Auntie too.",
+            "A slightly more grown-up look: cleaner lettering, eyebrows and shinier eyes.",
+            "Five songs to choose from in Settings, or your own: a video from your gallery or a song from Files.",
+            "The house on the menu matches the sky: dark at night, warm at sunrise and sunset, bright in the day.",
+            "With Real time on, the sun really rises in the early morning and sets in the evening, moving slowly across the menu sky with the clock. The moon crosses at night.",
+            "Multiplayer: customize player 2 (their own look and name), and the two joysticks are on opposite sides of the screen.",
+            "The Badges screen and this Update Log have categories along the top.",
+            "Two new badges: Cat whisperer and Sweet dreams.",
+        ]),
         ("The cinema", [
             "New side level: The Cinema. Pick one of 10 shows and pick your seat.",
             "Every show is one hour long. If you leave, your place is kept for next time.",
@@ -892,10 +1034,11 @@ struct UpdateLogView: View {
             NightSky()
             VStack(spacing: 16) {
                 MenuHeader(title: "Update Log", onBack: onBack)
+                CategoryBar(choices: Self.categories, picked: $category)
                 ScrollView {
                     VStack(spacing: 14) {
-                        ForEach(Self.updates.indices, id: \.self) { i in
-                            let update = Self.updates[i]
+                        ForEach(Self.updates.indices.filter { i in category == nil || Self.updates[i].notes.contains { Self.category(of: $0) == category } }, id: \.self) { i in
+                            let update = (title: Self.updates[i].title, notes: Self.updates[i].notes.filter { category == nil || Self.category(of: $0) == category })
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Text(update.title)

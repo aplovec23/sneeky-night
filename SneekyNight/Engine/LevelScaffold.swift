@@ -247,29 +247,38 @@ struct LevelScaffold<World: View, Extra: View>: View {
         let k = Self.k
         // Settings can swap the sides: joystick on the right, buttons on the left.
         return HStack(alignment: .center) {
-            if Settings.shared.swapSides { buttons(k) } else { Joystick(engine: engine, k: k) }
-            if engine.player2 != nil { playerTwoControls(k) }
-            Spacer()
-            itemButtons(k)
-            Spacer()
-            if Settings.shared.swapSides { Joystick(engine: engine, k: k) } else { buttons(k) }
+            if engine.player2 != nil {
+                // Two players: player 1's joystick on the far left, player 2's on the far right.
+                Joystick(engine: engine, k: k)
+                Spacer()
+                itemButtons(k)
+                Spacer()
+                buttons(k)
+                playerTwoControls(k)
+            } else {
+                if Settings.shared.swapSides { buttons(k) } else { Joystick(engine: engine, k: k) }
+                Spacer()
+                itemButtons(k)
+                Spacer()
+                if Settings.shared.swapSides { Joystick(engine: engine, k: k) } else { buttons(k) }
+            }
         }
         .padding(.horizontal, 24)
         .animation(.easeInOut(duration: 0.15), value: currentPrompt)
     }
 
-    /// Player 2's own small joystick and "use" button, next to player 1's joystick.
+    /// Player 2's own joystick and "use" button, on the right-hand side of the screen.
     private func playerTwoControls(_ k: CGFloat) -> some View {
         VStack(spacing: 2) {
             Text("PLAYER 2")
                 .font(.game(12, .heavy))
                 .foregroundStyle(.orange)
             HStack(spacing: 8) {
-                Joystick(engine: engine, k: k * 0.66, second: true)
                 ActionButton(key: GameKey.use2.label, symbol: "hand.raised.fill", size: 58 * k, color: .orange, action: engine.interact2)
+                Joystick(engine: engine, k: k * 0.8, second: true)
             }
         }
-        .padding(.leading, 10)
+        .padding(.leading, 18)
     }
 
     @ViewBuilder private func itemButtons(_ k: CGFloat) -> some View {
@@ -543,7 +552,8 @@ struct PlayerSprite: View {
                     .opacity(Settings.shared.nameTag ? 1 : 0)
                 CharacterView(look: look, facingRight: engine.facingRight,
                               walking: engine.walking && engine.z == 0,
-                              crouching: engine.crouching || engine.ducking, taunting: engine.taunting)
+                              crouching: engine.crouching || engine.ducking, taunting: engine.taunting,
+                              expression: mood)
                     .overlay(alignment: .top) {
                         // The creative crown: only while creative mode is on.
                         if engine.creative { CreativeCrown().offset(y: -34) }
@@ -559,6 +569,16 @@ struct PlayerSprite: View {
         .frame(width: 140, height: 200, alignment: .bottom)
         .opacity(engine.hidden ? 0 : engine.coverY != nil ? opacity * 0.55 : opacity)
         .anchored(at: engine.player)
+    }
+
+    /// The face your character makes right now. Nil: their usual resting face.
+    private var mood: Mood? {
+        if engine.hurt || engine.threat == 2 { return .scared }
+        if engine.z > 40 && !engine.flying { return .surprised }
+        if engine.threat == 1 || engine.noise > 70 { return .worried }
+        if engine.ducking || engine.coverY != nil { return .sneaky }
+        if engine.sprinting || engine.flying { return .happy }
+        return nil
     }
 }
 
@@ -585,7 +605,7 @@ struct FloorLayer<ThingView: View>: View {
                 if id == "player" {
                     PlayerSprite(engine: engine, look: look, name: name, opacity: playerOpacity)
                 } else if id == "player2", let spot = engine.player2 {
-                    PlayerTwoSprite(engine: engine, firstLook: look).anchored(at: spot)
+                    PlayerTwoSprite(engine: engine).anchored(at: spot)
                 } else if let thing = byID[id] {
                     // Things dropped in by creative mode look the same in every level.
                     if thing.id.hasPrefix("admin-") {

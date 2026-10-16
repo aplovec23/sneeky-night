@@ -19,6 +19,20 @@ struct Look: Equatable {
     var hairColor = 0
     /// Your own haircut: top height, fringe, sides, back length, spikes and curls, each from 0 to 1.
     var ownHair: [Double] = [0.4, 0.4, 0.2, 0.3, 0, 0]
+    /// Trousers colour from `LookOptions.pants`; -1 matches the T-shirt (the original look).
+    var pants = -1
+    /// Shoe colour from `LookOptions.shoes`; 0 is the white slippers.
+    var shoes = 0
+    /// Eye colour from `LookOptions.eyes`.
+    var eyes = 0
+    /// What kind of top: T-shirt, hoodie, stripes or an open jacket (`LookOptions.shirtStyles`).
+    var shirtStyle = 0
+    var freckles = false
+    var blush = true
+    /// The face your character makes when nothing is going on (`Mood`).
+    var face = 0
+    /// A picture from the photo gallery printed on the T-shirt (its id in `ShirtPhotos`). Nil = no photo.
+    var photo: String?
     /// One accessory found in a box, if you're wearing one.
     var accessory: Accessory?
     /// Boosting accessories being worn. These stack.
@@ -29,6 +43,110 @@ struct Look: Equatable {
 
     static func starter(_ gender: Gender) -> Look {
         Look(gender: gender, shirt: gender == .boy ? 0 : 1)
+    }
+
+    /// Reads a look saved under `p` (the save file's prefix, or "p2." for player 2). Nil if nothing is saved there.
+    static func load(_ d: UserDefaults, _ p: String) -> Look? {
+        guard d.object(forKey: p + "shirt") != nil else { return nil }
+        var look = Look.starter(Gender(rawValue: d.string(forKey: p + "gender") ?? "") ?? .boy)
+        look.skin = d.integer(forKey: p + "skin")
+        look.shirt = d.integer(forKey: p + "shirt")
+        look.pattern = d.integer(forKey: p + "pattern")
+        look.cap = d.integer(forKey: p + "cap")
+        look.hair = d.integer(forKey: p + "hair")
+        look.hairColor = d.integer(forKey: p + "hairColor")
+        if let own = d.array(forKey: p + "ownHair") as? [Double], own.count == look.ownHair.count { look.ownHair = own }
+        look.pants = d.object(forKey: p + "pants") == nil ? -1 : d.integer(forKey: p + "pants")
+        look.shoes = d.integer(forKey: p + "shoes")
+        look.eyes = d.integer(forKey: p + "eyes")
+        look.shirtStyle = d.integer(forKey: p + "shirtStyle")
+        look.freckles = d.bool(forKey: p + "freckles")
+        look.blush = d.object(forKey: p + "blush") == nil ? true : d.bool(forKey: p + "blush")
+        look.face = d.integer(forKey: p + "face")
+        look.photo = d.string(forKey: p + "photo")
+        look.accessory = Accessory.find(d.string(forKey: p + "accessory") ?? "")
+        look.boosts = Set((d.stringArray(forKey: p + "wornBoosts") ?? []).compactMap(Boost.init(rawValue:)))
+        look.hiddenBoosts = Set((d.stringArray(forKey: p + "hiddenBoosts") ?? []).compactMap(Boost.init(rawValue:)))
+        return look
+    }
+
+    func store(_ d: UserDefaults, _ p: String) {
+        d.set(gender.rawValue, forKey: p + "gender")
+        d.set(skin, forKey: p + "skin")
+        d.set(shirt, forKey: p + "shirt")
+        d.set(pattern, forKey: p + "pattern")
+        d.set(cap, forKey: p + "cap")
+        d.set(hair, forKey: p + "hair")
+        d.set(hairColor, forKey: p + "hairColor")
+        d.set(ownHair, forKey: p + "ownHair")
+        d.set(pants, forKey: p + "pants")
+        d.set(shoes, forKey: p + "shoes")
+        d.set(eyes, forKey: p + "eyes")
+        d.set(shirtStyle, forKey: p + "shirtStyle")
+        d.set(freckles, forKey: p + "freckles")
+        d.set(blush, forKey: p + "blush")
+        d.set(face, forKey: p + "face")
+        d.set(photo, forKey: p + "photo")
+        d.set(accessory?.id, forKey: p + "accessory")
+        d.set(boosts.map(\.rawValue), forKey: p + "wornBoosts")
+        d.set(hiddenBoosts.map(\.rawValue), forKey: p + "hiddenBoosts")
+    }
+}
+
+/// The face a character makes. Your character changes face by itself in a level (worried when
+/// someone is looking for you, scared when they're close, surprised in the air...); the one picked
+/// in Customize Character is the face it makes when nothing is going on.
+enum Mood: Int, CaseIterable {
+    case calm, happy, worried, scared, surprised, sneaky, sleepy, cross
+
+    var name: String {
+        switch self {
+        case .calm: "Calm"
+        case .happy: "Happy"
+        case .worried: "Worried"
+        case .scared: "Scared"
+        case .surprised: "Surprised"
+        case .sneaky: "Sneaky"
+        case .sleepy: "Sleepy"
+        case .cross: "Cross"
+        }
+    }
+}
+
+/// Pictures from the photo gallery for the T-shirt. Each is shrunk and kept on the device as a PNG.
+enum ShirtPhotos {
+    private static var cache: [String: UIImage] = [:]
+
+    private static var folder: URL {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("ShirtPhotos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Saves a picture and returns its id (nil if it couldn't be read).
+    static func add(_ data: Data) -> String? {
+        guard let picked = UIImage(data: data) else { return nil }
+        // Square, 256 pixels: plenty for a picture on a T-shirt.
+        let side: CGFloat = 256
+        let scale = max(side / max(picked.size.width, 1), side / max(picked.size.height, 1))
+        let size = CGSize(width: picked.size.width * scale, height: picked.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let small = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
+            picked.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
+        }
+        guard let png = small.pngData() else { return nil }
+        let id = UUID().uuidString
+        do { try png.write(to: folder.appendingPathComponent(id + ".png")) } catch { return nil }
+        cache[id] = small
+        return id
+    }
+
+    static func image(_ id: String) -> UIImage? {
+        if let hit = cache[id] { return hit }
+        guard let image = UIImage(contentsOfFile: folder.appendingPathComponent(id + ".png").path) else { return nil }
+        cache[id] = image
+        return image
     }
 }
 
@@ -66,6 +184,20 @@ enum LookOptions {
         Color(red: 0.60, green: 0.38, blue: 0.20), Color(red: 0.55, green: 0.85, blue: 1.0),
     ]
     static let extraCaps: [Color?] = [.white, .pink, .cyan, Palette.gold]
+    static let pants: [Color] = [
+        Color(red: 0.20, green: 0.25, blue: 0.40), Color(white: 0.18), Color(red: 0.45, green: 0.32, blue: 0.20),
+        Color(red: 0.55, green: 0.55, blue: 0.58), Color(red: 0.25, green: 0.38, blue: 0.25), Color(red: 0.62, green: 0.20, blue: 0.24),
+        Color(red: 0.85, green: 0.78, blue: 0.62),
+    ]
+    static let shoes: [Color] = [
+        Color(red: 0.95, green: 0.95, blue: 0.98), Color(white: 0.15), Color(red: 0.85, green: 0.20, blue: 0.22),
+        Color(red: 0.20, green: 0.45, blue: 0.90), Color(red: 0.95, green: 0.75, blue: 0.20), Color(red: 0.50, green: 0.32, blue: 0.20),
+    ]
+    static let eyes: [Color] = [
+        Color(white: 0.08), Color(red: 0.38, green: 0.22, blue: 0.10), Color(red: 0.20, green: 0.45, blue: 0.85),
+        Color(red: 0.25, green: 0.55, blue: 0.30), Color(red: 0.55, green: 0.55, blue: 0.60), Color(red: 0.55, green: 0.30, blue: 0.70),
+    ]
+    static let shirtStyles = ["T-shirt", "Hoodie", "Stripes", "Jacket"]
     static let allShirts = shirts + extraShirts
     static let allCaps = caps + extraCaps
 }
@@ -164,11 +296,15 @@ enum Boost: String, CaseIterable, Identifiable {
     case coolCap, leaf, lightningBall, windCrown, goldenCrown, arrow, cloud
     /// The Guide's own hat. It never turns up in the game: it's only given to devices listed in `GuidesHat.devices`.
     case guidesHat
+    /// Auntie's water hose: only ever given by Auntie at the end of Level 7.
+    case waterHose
 
     var id: String { rawValue }
 
-    /// Every boost you can actually find (boxes, rats, the roof, the secret room). The Guide's Hat isn't one.
-    static let findable: [Boost] = allCases.filter { $0 != .guidesHat }
+    /// The boosts that never turn up in boxes, rats or chests: the Guide's Hat and Auntie's Water Hose.
+    static let special: [Boost] = [.guidesHat, .waterHose]
+    /// Every boost you can actually find (boxes, rats, the roof, the secret room).
+    static let findable: [Boost] = allCases.filter { !special.contains($0) }
     var name: String {
         switch self {
         case .coolCap: "Cool Cap with a Can"
@@ -179,6 +315,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: "Arrow"
         case .cloud: "Cloud"
         case .guidesHat: "The Guide's Hat"
+        case .waterHose: "Water Hose"
         }
     }
     var about: String {
@@ -191,6 +328,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: "Dash ×1.9 and walking speed ×1.2"
         case .cloud: "Press X: fly for 10 seconds, over obstacles and hedges. 30 second cooldown."
         case .guidesHat: "Press H: switch it on or off. While it's on, everything is ×10.5 and you walk through things."
+        case .waterHose: "Press J: spray whoever is chasing you so they can't see for 8 seconds (every 25). In Level 4 it waters five plants at once."
         }
     }
     var symbol: String {
@@ -203,6 +341,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: "arrow.right"
         case .cloud: "cloud.fill"
         case .guidesHat: "hat.widebrim.fill"
+        case .waterHose: "drop.circle.fill"
         }
     }
     var color: Color {
@@ -215,6 +354,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: .orange
         case .cloud: Color(red: 0.8, green: 0.92, blue: 1)
         case .guidesHat: GuidesHat.color
+        case .waterHose: Color(red: 0.25, green: 0.70, blue: 0.85)
         }
     }
 
@@ -229,6 +369,7 @@ enum Boost: String, CaseIterable, Identifiable {
         case .arrow: "From an old toy archery set. The bow is long gone; the arrow still wants to fly forward."
         case .cloud: "A scrap of morning fog that got caught in the garden hedge and never left."
         case .guidesHat: "The Guide's own hat. Nobody knows who made it, and he only lends it to people he chooses himself."
+        case .waterHose: "Auntie's garden hose, coiled on her back step for thirty years. She gave it to you for washing her backyard and finding every kitten."
         }
     }
 
@@ -305,8 +446,23 @@ enum Badge: String, CaseIterable, Identifiable {
     case multiplayer, trolledAgain, retry, numberOne
     case justInCase, unstoppable
     case worldRevolving
+    case kittens, dreamer
 
     var id: String { rawValue }
+
+    /// The groups on the Badges screen.
+    static let categories = ["Levels", "Sneaking", "Family", "Secrets", "Collecting", "Special days"]
+
+    var category: String {
+        switch self {
+        case .level1, .level2, .level3, .level4, .patienceIsKey, .numberOne, .kittens: "Levels"
+        case .oopsies, .amNotPm, .hiDad, .deadlySqueak, .oldHouse, .tooHard, .shh, .retry, .goAwayMom: "Sneaking"
+        case .trolledMom, .funnySon, .friendlyRoute, .crashout, .trolledAgain, .passcode, .fireMusic: "Family"
+        case .curiosity, .fly, .owl, .goldenStick, .power, .luckyGuess, .southPark, .worldRevolving, .dreamer: "Secrets"
+        case .ninja, .coolCap, .unstoppable, .justInCase, .multiplayer: "Collecting"
+        case .aprilFool, .pumpkins, .jolly, .joinedDemo, .boredom: "Special days"
+        }
+    }
 
     /// Not possible until a later update. These show up named "soon".
     var isSoon: Bool { self == .aprilFool || self == .jolly }
@@ -354,6 +510,8 @@ enum Badge: String, CaseIterable, Identifiable {
         case .justInCase: return "Just in case"
         case .unstoppable: return "Im unstoppable!"
         case .worldRevolving: return "the world revolving"
+        case .kittens: return "Cat whisperer"
+        case .dreamer: return "Sweet dreams"
         }
     }
 
@@ -400,6 +558,8 @@ enum Badge: String, CaseIterable, Identifiable {
         case .justInCase: return "Make 10 save files."
         case .unstoppable: return "Own every boosting accessory and every permanent item."
         case .worldRevolving: return "Sprint with star ball power while wearing every speed-boosting accessory."
+        case .kittens: return "Find every missing kitten in Auntie's backyard."
+        case .dreamer: return "Wake up from a dream (Side Level 5)."
         }
     }
 
@@ -444,6 +604,8 @@ enum Badge: String, CaseIterable, Identifiable {
         case .justInCase: "folder.fill"
         case .unstoppable: "bolt.shield.fill"
         case .worldRevolving: "globe.americas.fill"
+        case .kittens: "cat.fill"
+        case .dreamer: "moon.zzz.fill"
         }
     }
 
@@ -505,6 +667,11 @@ final class GameState {
     var creativeOn: Bool { didSet { save() } }
     /// Two players on this iPad. Not saved: it's off again next launch.
     var multiplayer = false
+    /// Player 2's own look and name (Multiplayer → Customize player 2). Saved with this file.
+    var player2Look: Look { didSet { save() } }
+    var player2Name: String { didSet { save() } }
+    /// Levels you've paid to get into (Level 7 costs orbs).
+    var paidLevels: Set<Int> { didSet { save() } }
     var caughtCount: Int { didSet { save() } }
     var retryCount: Int { didSet { save() } }
     /// Who has been given a toy: "mom", "brother", "dad".
@@ -526,20 +693,14 @@ final class GameState {
         prefix = p
         playerName = defaults.string(forKey: p + "playerName") ?? ""
         let gender = Gender(rawValue: defaults.string(forKey: p + "gender") ?? "") ?? .boy
-        var look = Look.starter(gender)
-        if defaults.object(forKey: p + "shirt") != nil {
-            look.skin = defaults.integer(forKey: p + "skin")
-            look.shirt = defaults.integer(forKey: p + "shirt")
-            look.pattern = defaults.integer(forKey: p + "pattern")
-            look.cap = defaults.integer(forKey: p + "cap")
-            look.hair = defaults.integer(forKey: p + "hair")
-            look.hairColor = defaults.integer(forKey: p + "hairColor")
-            if let own = defaults.array(forKey: p + "ownHair") as? [Double], own.count == look.ownHair.count { look.ownHair = own }
-            look.accessory = Accessory.find(defaults.string(forKey: p + "accessory") ?? "")
-            look.boosts = Set((defaults.stringArray(forKey: p + "wornBoosts") ?? []).compactMap(Boost.init(rawValue:)))
-            look.hiddenBoosts = Set((defaults.stringArray(forKey: p + "hiddenBoosts") ?? []).compactMap(Boost.init(rawValue:)))
-        }
+        let look = Look.load(defaults, p) ?? Look.starter(gender)
         self.look = look
+        // Player 2 starts as the other gender in a different shirt, until they're customized.
+        player2Look = Look.load(defaults, p + "p2.")
+            ?? Look(gender: gender == .boy ? .girl : .boy, skin: (look.skin + 2) % LookOptions.skins.count,
+                    shirt: look.shirt == 4 ? 3 : 4, pattern: 2, cap: 0)
+        player2Name = defaults.string(forKey: p + "p2.name") ?? "Player 2"
+        paidLevels = Set(defaults.array(forKey: p + "paidLevels") as? [Int] ?? [])
         hasCharacter = defaults.bool(forKey: p + "hasCharacter")
         let won = Set(defaults.array(forKey: p + "completedLevels") as? [Int] ?? [])
         let learned = Set((defaults.stringArray(forKey: p + "skills") ?? []).compactMap(Skill.init(rawValue:)))
@@ -733,6 +894,9 @@ final class GameState {
     }
     var carUnlocked: Bool { carRequirements.allSatisfy(\.met) }
 
+    /// Side Level 5 (Dreams): every level won.
+    var dreamRequirements: [(text: String, met: Bool)] { [("Win every level", allLevelsWon)] }
+
     private func endgame(badges count: Int) -> [(text: String, met: Bool)] {
         [("Win every level", allLevelsWon),
          ("Finish every side level", allSidesDone),
@@ -761,9 +925,29 @@ final class GameState {
         if count >= 10 { award(.justInCase) }
     }
 
-    /// You can only play a level once you've won the one before it.
+    /// You can only play a level once you've won the one before it. Level 7 also needs 32 badges
+    /// and 10 orbs paid at the gate (once).
     func isUnlocked(_ level: LevelInfo) -> Bool {
-        level.isReady && (level.id == 1 || completedLevels.contains(level.id - 1))
+        guard level.isReady && (level.id == 1 || completedLevels.contains(level.id - 1)) else { return false }
+        return level.id != 7 || (badges.count >= Self.level7Badges && paidLevels.contains(7))
+    }
+
+    static let level7Badges = 32
+    static let level7Price = 10
+
+    /// What Level 7 needs, for the Levels screen.
+    var level7Requirements: [(text: String, met: Bool)] {
+        [("Win Level 6", completedLevels.contains(6)),
+         ("Earn \(Self.level7Badges) badges (\(min(badges.count, Self.level7Badges))/\(Self.level7Badges))", badges.count >= Self.level7Badges),
+         ("Pay \(Self.level7Price) orbs (you have \(orbs))", paidLevels.contains(7) || orbs >= Self.level7Price)]
+    }
+
+    /// Pays Level 7's entry. False if you can't yet (not enough orbs or badges, or Level 6 not won).
+    func payForLevel7() -> Bool {
+        guard !paidLevels.contains(7), completedLevels.contains(6), badges.count >= Self.level7Badges, orbs >= Self.level7Price else { return false }
+        orbs -= Self.level7Price
+        paidLevels.insert(7)
+        return true
     }
 
     /// The level "Play" starts: the first one you haven't won yet. Nil when every finished level is won.
@@ -784,17 +968,10 @@ final class GameState {
     private func save() {
         let p = prefix
         defaults.set(playerName, forKey: p + "playerName")
-        defaults.set(look.gender.rawValue, forKey: p + "gender")
-        defaults.set(look.skin, forKey: p + "skin")
-        defaults.set(look.shirt, forKey: p + "shirt")
-        defaults.set(look.pattern, forKey: p + "pattern")
-        defaults.set(look.cap, forKey: p + "cap")
-        defaults.set(look.hair, forKey: p + "hair")
-        defaults.set(look.hairColor, forKey: p + "hairColor")
-        defaults.set(look.ownHair, forKey: p + "ownHair")
-        defaults.set(look.accessory?.id, forKey: p + "accessory")
-        defaults.set(look.boosts.map(\.rawValue), forKey: p + "wornBoosts")
-        defaults.set(look.hiddenBoosts.map(\.rawValue), forKey: p + "hiddenBoosts")
+        look.store(defaults, p)
+        player2Look.store(defaults, p + "p2.")
+        defaults.set(player2Name, forKey: p + "p2.name")
+        defaults.set(Array(paidLevels), forKey: p + "paidLevels")
         defaults.set(hasCharacter, forKey: p + "hasCharacter")
         defaults.set(Array(completedLevels), forKey: p + "completedLevels")
         defaults.set(skills.map(\.rawValue), forKey: p + "skills")
@@ -871,6 +1048,7 @@ enum Levels {
         case 4: LevelInfo(id: 4, room: "Garden", symbol: "leaf.fill", seconds: seconds[3], isReady: true)
         case 5: LevelInfo(id: 5, room: "Street", symbol: "road.lanes", seconds: seconds[4], isReady: true)
         case 6: LevelInfo(id: 6, room: "Auntie's House", symbol: "cat.fill", seconds: seconds[5], isReady: true)
+        case 7: LevelInfo(id: 7, room: "Auntie's Backyard", symbol: "drop.fill", seconds: seconds[6], isReady: true)
         default: LevelInfo(id: id, room: "Coming soon", symbol: "lock.fill", seconds: seconds[id - 1], isReady: false)
         }
     }

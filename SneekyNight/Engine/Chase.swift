@@ -193,6 +193,12 @@ final class Chase {
     }
 
     func tick(_ dt: Double) {
+        // Your character's face: worried while someone is looking for you, scared when they're close.
+        if let engine {
+            let close = active && visible && hypot(engine.player.x - pos.x, engine.player.y - pos.y) < 330
+            let level = !active ? 0 : close ? 2 : 1
+            if engine.threat != level { engine.threat = level }
+        }
         guard active, let engine else { return }
         if bannerTime > 0 {
             bannerTime -= dt

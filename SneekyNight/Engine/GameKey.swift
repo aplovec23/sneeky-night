@@ -8,7 +8,7 @@ enum GameKey: CaseIterable {
     case up, left, down, right
     case use, jump, carry, crouch, taunt, dash, run
     // Items, in the order of `ItemBelt.Item`
-    case vines, lightning, toy, bat, cloud, hat
+    case vines, lightning, toy, bat, cloud, hat, hose
     // The buttons along the top of a level
     case pause, menu, restart, hint, admin
     // Player 2 (multiplayer)
@@ -33,6 +33,7 @@ enum GameKey: CaseIterable {
         case .bat: .keyB
         case .cloud: .keyX
         case .hat: .keyH
+        case .hose: .keyJ
         case .pause: .keyP
         case .menu: .keyM
         case .restart: .keyN
@@ -66,6 +67,7 @@ enum GameKey: CaseIterable {
         case .bat: "B"
         case .cloud: "X"
         case .hat: "H"
+        case .hose: "J"
         case .pause: "P"
         case .menu: "M"
         case .restart: "N"
@@ -80,7 +82,7 @@ enum GameKey: CaseIterable {
     }
 
     /// The item keys, in the same order as the items on the belt.
-    static let items: [GameKey] = [.vines, .lightning, .toy, .bat, .cloud, .hat]
+    static let items: [GameKey] = [.vines, .lightning, .toy, .bat, .cloud, .hat, .hose]
     /// Extra keys that do the same job as one above: Esc also pauses, and either Shift runs.
     static let alsoWatched: [GCKeyCode] = [.escape, .rightShift]
 }

@@ -633,6 +633,11 @@ final class CustomLevelModel {
     let belt = ItemBelt()
 
     @ObservationIgnored var onExit: () -> Void = {}
+    /// Dreams (Side Level 5) use custom levels too: they count the win, and "again" makes a brand-new dream.
+    @ObservationIgnored var onWin: () -> Void = {}
+    @ObservationIgnored var onPlayAgain: (() -> Void)?
+    @ObservationIgnored var winTitle = "You did it!"
+    @ObservationIgnored var winMessage: String?
     @ObservationIgnored var onEdit: () -> Void = {}
     @ObservationIgnored private var keyBoxes: Set<String> = []
     @ObservationIgnored private var dadHome: CGPoint = .zero
@@ -839,8 +844,12 @@ final class CustomLevelModel {
         chase.reset()
         Sound.unlock.play()
         Sound.win.play()
-        show(Popup(title: "You did it!", message: "You beat \"\(level.name)\"!", symbol: "star.fill", color: Palette.gold,
-                   button: "Play again", action: { [weak self] in self?.reset() },
+        onWin()
+        show(Popup(title: winTitle, message: winMessage ?? "You beat \"\(level.name)\"!", symbol: "star.fill", color: Palette.gold,
+                   button: onPlayAgain == nil ? "Play again" : "Dream again",
+                   action: { [weak self] in
+                       if let again = self?.onPlayAgain { again() } else { self?.reset() }
+                   },
                    secondButton: "Back", secondAction: { [weak self] in self?.onExit() }))
     }
 
@@ -1021,13 +1030,15 @@ struct CustomLevelView: View {
     }
 }
 
-private struct CustomLevelStage: View {
+struct CustomLevelStage: View {
     @Environment(GameState.self) private var game
     let model: CustomLevelModel
     let onExit: () -> Void
+    /// Side Level 5: the room is a dream (purple light, floating Zs).
+    var dream = false
 
     var body: some View {
-        LevelScaffold(engine: model.engine, title: "\(model.level.name)  ·  keys \(model.inventory.count)/\(model.level.keyCount)",
+        LevelScaffold(engine: model.engine, title: "\(dream ? "Dream · " : "")\(model.level.name)  ·  keys \(model.inventory.count)/\(model.level.keyCount)",
                       inventory: model.inventory, popup: model.popup, banner: model.banner, belt: model.belt,
                       chase: model.chase, creativeHere: model.level.creative == true, onHome: onExit, onRestart: model.reset, onHint: model.hint) {
             world.allowsHitTesting(false)
@@ -1081,6 +1092,7 @@ private struct CustomLevelStage: View {
             }
             ChaserView(chase: model.chase)
             Palette.shade.opacity(0.2 * Palette.shadeAmount)
+            if dream { DreamHaze(width: CGFloat(model.level.width)) }
         }
         .frame(width: CGFloat(model.level.width), height: 700, alignment: .topLeading)
     }

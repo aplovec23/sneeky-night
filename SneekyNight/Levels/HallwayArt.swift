@@ -422,8 +422,11 @@ struct MomView: View {
     private let skin = Color(red: 0.96, green: 0.80, blue: 0.66)
 
     var body: some View {
-        TimelineView(.animation(paused: !walking)) { ctx in
-            figure(swing: walking ? sin(ctx.date.timeIntervalSinceReferenceDate * 9) : 0)
+        // Never quite still: standing, she breathes and her arms sway a little.
+        TimelineView(.animation(minimumInterval: walking ? nil : 1 / 24)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            figure(swing: walking ? sin(t * 9) : sin(t * 1.7) * 0.12)
+                .offset(y: walking ? 0 : sin(t * 1.7 + 0.8) * 1.2)
         }
         .frame(width: 140, height: 260)
         .rotationEffect(.degrees(stunned ? 6 : 0), anchor: .bottom)

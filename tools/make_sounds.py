@@ -180,4 +180,51 @@ save("filmCosy", score(0.62, [F, C, Dm, C],
 # The lobby: an easy little tune while you choose
 save("filmLobby", score(0.5, [C, Am, Dm, G],
      [659.3, 0, 784, 659.3, 523.3, 0, 440, 0, 587.3, 0, 698.5, 587.3, 493.9, 587.3, 392, 0], lead="tri", lead_vol=0.10))
+
+# --- Menu songs (Settings -> Song). The first song is "music" above; these are the other four.
+# Each is 8 chords x 4 beats, so they loop less often than the cinema tunes.
+def song(beat, chords, melody, lead="tri", lead_vol=0.11, arp=True, bass_vol=0.14, vib=4, staccato=False, drums=False):
+    bars = len(chords)
+    total = int(beat * 4 * bars * RATE)
+    out = [0.0] * total
+    def add(start, samples):
+        for i, v in enumerate(samples):
+            if start + i < total: out[start + i] += v
+    for c, chord in enumerate(chords):
+        add(int(c * 4 * beat * RATE), tone(chord[0] / 4, beat * 4, bass_vol, curve=1.2, attack=0.08))
+        steps = 8 if arp else 4
+        for b in range(steps):
+            start = int((c * 4 + b * 4 / steps) * beat * RATE)
+            add(start, tone(chord[b % len(chord)] / 2, beat * (0.5 if arp else 1.5), 0.09, shape="tri", curve=3 if arp else 2, attack=0.01))
+        if drums:
+            for b in range(4):
+                start = int((c * 4 + b) * beat * RATE)
+                add(start, noise(0.05, 0.10 if b % 2 else 0.16, 0.6 if b % 2 else 0.9, curve=8))
+    per = len(melody) / (4 * bars)
+    for n, f in enumerate(melody):
+        if f:
+            add(int(n * beat * RATE / per), tone(f, beat * (0.45 if staccato else 1.2) / per, lead_vol, shape=lead, curve=5 if staccato else 2.5, attack=0.01, vib=vib))
+    return out
+
+Em, D, B7 = (164.8, 196.0, 246.9), (146.8, 185.0, 220.0), (246.9, 311.1, 370.0)
+# Sneaky Steps: tiptoeing, plucky and a little cheeky
+save("songSteps", song(0.40, [Am, Em, F, G, Am, Em, Dm, Em],
+     [440, 0, 523.3, 0, 493.9, 0, 440, 0, 392, 0, 440, 493.9, 523.3, 0, 0, 0,
+      349.2, 0, 440, 0, 523.3, 0, 587.3, 0, 523.3, 493.9, 440, 0, 392, 0, 0, 0,
+      440, 0, 523.3, 0, 493.9, 0, 440, 0, 392, 0, 440, 493.9, 523.3, 0, 659.3, 0,
+      587.3, 0, 523.3, 0, 440, 0, 349.2, 0, 329.6, 0, 392, 0, 440, 0, 0, 0], lead="square", lead_vol=0.07, vib=0, staccato=True))
+# Moonlit Stroll: slow and calm, for a quiet night
+save("songStroll", song(0.70, [C, Am, F, G, C, Em, F, G],
+     [659.3, 0, 587.3, 523.3, 0, 0, 440, 523.3, 0, 0, 0, 0, 587.3, 0, 493.9, 0,
+      523.3, 0, 659.3, 0, 784, 0, 659.3, 0, 698.5, 0, 659.3, 587.3, 0, 0, 0, 0], lead="sine", lead_vol=0.12, arp=False, vib=5))
+# Sunrise: bright and hopeful, the sky going pink
+save("songSunrise", song(0.46, [D, Bb, C, A, D, Bb, Gm, A],
+     [587.3, 0, 740, 0, 880, 0, 740, 587.3, 0, 0, 698.5, 0, 784, 0, 659.3, 0,
+      587.3, 659.3, 740, 0, 880, 0, 987.8, 880, 784, 0, 740, 0, 659.3, 0, 0, 0], lead="tri", lead_vol=0.11, vib=3))
+# Midnight Run: fast, with a beat, for a chase
+save("songRun", song(0.30, [Em, C, D, B7, Em, C, Am, B7],
+     [659.3, 659.3, 784, 659.3, 587.3, 0, 493.9, 0, 523.3, 523.3, 659.3, 523.3, 587.3, 0, 740, 0,
+      659.3, 0, 784, 0, 880, 784, 740, 0, 659.3, 0, 587.3, 0, 622.3, 0, 740, 0,
+      659.3, 659.3, 784, 659.3, 587.3, 0, 493.9, 0, 523.3, 523.3, 659.3, 523.3, 587.3, 0, 740, 0,
+      880, 0, 784, 0, 659.3, 0, 587.3, 0, 493.9, 0, 622.3, 0, 659.3, 0, 0, 0], lead="saw", lead_vol=0.06, vib=0, staccato=True, drums=True))
 print("sounds written:", len(os.listdir(OUT)))

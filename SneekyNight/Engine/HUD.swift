@@ -365,17 +365,16 @@ struct FlyingCloud: View {
 
 /// Player 2 in multiplayer mode.
 struct PlayerTwoSprite: View {
+    @Environment(GameState.self) private var game
     let engine: GameEngine
-    /// Player 1's look, so player 2 can be made to look different.
-    let firstLook: Look
 
     var body: some View {
-        let look = Look(gender: firstLook.gender == .boy ? .girl : .boy, skin: (firstLook.skin + 2) % LookOptions.skins.count,
-                        shirt: firstLook.shirt == 4 ? 3 : 4, pattern: 2, cap: 0)
+        // Player 2's own look, from Multiplayer → Customize player 2.
+        let look = game.player2Look
         ZStack(alignment: .bottom) {
             Ellipse().fill(.black.opacity(0.3)).frame(width: 64, height: 15).offset(y: 6)
             VStack(spacing: 2) {
-                Text("P2")
+                Text(game.player2Name.isEmpty ? "P2" : game.player2Name)
                     .font(.game(16, .heavy))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 9)

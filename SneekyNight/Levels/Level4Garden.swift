@@ -55,6 +55,8 @@ final class GardenModel {
     @ObservationIgnored private var dadLaughed = false
     @ObservationIgnored private var barkTime = 0.0
     @ObservationIgnored private var waterSound = 0.0
+    /// Wearing Auntie's Water Hose (from Level 7): every plant you water also waters the four nearest thirsty ones.
+    @ObservationIgnored var hasHose = false
 
     static let plantCount = 100
     /// On Easy the gate code is three numbers and there are only two keys to find.
@@ -544,16 +546,29 @@ final class GardenModel {
         let p = engine.player
         for i in engine.things.indices where engine.things[i].kind == "plant" && !engine.things[i].open {
             let q = engine.things[i].pos
-            guard abs(q.x - p.x) < 75, abs(q.y - p.y) < 62 else { continue }
-            engine.things[i].open = true
-            watered += 1
+            guard abs(q.x - p.x) < 75, abs(q.y - p.y) < 62, !engine.things[i].open else { continue }
+            let before = watered
+            var group = [i]
+            if hasHose {
+                // The hose reaches further: five plants at once instead of one.
+                let thirsty = engine.things.indices.filter { $0 != i && engine.things[$0].kind == "plant" && !engine.things[$0].open }
+                group += thirsty.sorted {
+                    hypot(engine.things[$0].pos.x - q.x, engine.things[$0].pos.y - q.y) < hypot(engine.things[$1].pos.x - q.x, engine.things[$1].pos.y - q.y)
+                }.prefix(4)
+            }
+            for j in group {
+                engine.things[j].open = true
+                watered += 1
+            }
             if waterSound <= 0 {
                 Sound.water.play(volume: 0.6)
                 waterSound = 0.3
             }
-            if watered % 10 == 0 && watered < Self.plantCount {
-                engine.timeLeft += 20
-                engine.say("\(watered) plants watered! +20 seconds", seconds: 1.6)
+            // +20 seconds for every ten plants (the hose can pass several tens at once).
+            let tens = min(watered, Self.plantCount - 1) / 10 - before / 10
+            if tens > 0 {
+                engine.timeLeft += 20 * Double(tens)
+                engine.say("\(watered) plants watered! +\(20 * tens) seconds", seconds: 1.6)
             }
             checkDone()
         }
@@ -764,6 +779,7 @@ struct GardenLevelView: View {
             model.rollLoot = { game.rollLoot() }
             model.take = { game.take($0) }
             model.belt.configure(game: game, engine: model.engine)
+            model.hasHose = game.look.boosts.contains(.waterHose)
             model.apply(skills: game.skills)
             model.engine.start()
         }

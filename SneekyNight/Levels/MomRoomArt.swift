@@ -204,9 +204,10 @@ struct DadView: View {
     private let skin = Color(red: 0.94, green: 0.76, blue: 0.62)
 
     var body: some View {
-        TimelineView(.animation(paused: !walking && !laughing)) { ctx in
+        // Never quite still: standing, he breathes and sways a little.
+        TimelineView(.animation(minimumInterval: walking || laughing ? nil : 1 / 24)) { ctx in
             let t = ctx.date.timeIntervalSinceReferenceDate
-            figure(swing: walking ? sin(t * 9) : 0, shake: laughing ? sin(t * 26) * 3 : 0)
+            figure(swing: walking ? sin(t * 9) : sin(t * 1.6) * 0.12, shake: laughing ? sin(t * 26) * 3 : sin(t * 1.6 + 1) * 1.2)
         }
         .frame(width: 150, height: 280)
     }
