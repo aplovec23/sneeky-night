@@ -447,6 +447,7 @@ enum Badge: String, CaseIterable, Identifiable {
     case justInCase, unstoppable
     case worldRevolving
     case kittens, dreamer
+    case wholeGame
 
     var id: String { rawValue }
 
@@ -455,7 +456,7 @@ enum Badge: String, CaseIterable, Identifiable {
 
     var category: String {
         switch self {
-        case .level1, .level2, .level3, .level4, .patienceIsKey, .numberOne, .kittens: "Levels"
+        case .level1, .level2, .level3, .level4, .patienceIsKey, .numberOne, .kittens, .wholeGame: "Levels"
         case .oopsies, .amNotPm, .hiDad, .deadlySqueak, .oldHouse, .tooHard, .shh, .retry, .goAwayMom: "Sneaking"
         case .trolledMom, .funnySon, .friendlyRoute, .crashout, .trolledAgain, .passcode, .fireMusic: "Family"
         case .curiosity, .fly, .owl, .goldenStick, .power, .luckyGuess, .southPark, .worldRevolving, .dreamer: "Secrets"
@@ -512,6 +513,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .worldRevolving: return "the world revolving"
         case .kittens: return "Cat whisperer"
         case .dreamer: return "Sweet dreams"
+        case .wholeGame: return "how did we get here"
         }
     }
 
@@ -560,6 +562,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .worldRevolving: return "Sprint with star ball power while wearing every speed-boosting accessory."
         case .kittens: return "Find every missing kitten in Auntie's backyard."
         case .dreamer: return "Wake up from a dream (Side Level 5)."
+        case .wholeGame: return "Complete the whole game: every level, and Side Levels 1 to 5."
         }
     }
 
@@ -606,6 +609,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .worldRevolving: "globe.americas.fill"
         case .kittens: "cat.fill"
         case .dreamer: "moon.zzz.fill"
+        case .wholeGame: "map.fill"
         }
     }
 
@@ -643,7 +647,7 @@ final class GameState {
     var playerName: String { didSet { save() } }
     var look: Look { didSet { save() } }
     var hasCharacter: Bool { didSet { save() } }
-    var completedLevels: Set<Int> { didSet { save() } }
+    var completedLevels: Set<Int> { didSet { save(); checkWholeGame() } }
     var skills: Set<Skill> { didSet { save() } }
     var badges: Set<Badge> { didSet { save() } }
     var accessories: Set<Accessory> { didSet { save() } }
@@ -654,7 +658,7 @@ final class GameState {
     var hasBat: Bool { didSet { save() } }
     /// More T-shirt and cap colours, from Side Level 1's secret room.
     var extraColors: Bool { didSet { save() } }
-    var completedSide: Set<Int> { didSet { save() } }
+    var completedSide: Set<Int> { didSet { save(); checkWholeGame() } }
     /// Dungeon money, and how many orbs you've ever mined (for the dungeon quest).
     var orbs: Int { didSet { save() } }
     var orbsMined: Int { didSet { save() } }
@@ -670,6 +674,14 @@ final class GameState {
     /// Player 2's own look and name (Multiplayer → Customize player 2). Saved with this file.
     var player2Look: Look { didSet { save() } }
     var player2Name: String { didSet { save() } }
+    /// How the Guide looks (Customize the Guide). His hat always stays on.
+    var guideLook: Look { didSet { save() } }
+    /// The golden stick, kept for good (from The Room, Side Level 6). Press K in a level.
+    var hasGoldenStick: Bool { didSet { save() } }
+    /// Dreams won in a row (Side Level 5). Losing one, or leaving it unfinished, starts again at 0.
+    var dreamStreak: Int { didSet { save() } }
+    /// The longest dream streak ever.
+    var dreamBest: Int { didSet { save() } }
     /// Levels you've paid to get into (Level 7 costs orbs).
     var paidLevels: Set<Int> { didSet { save() } }
     var caughtCount: Int { didSet { save() } }
@@ -700,6 +712,10 @@ final class GameState {
             ?? Look(gender: gender == .boy ? .girl : .boy, skin: (look.skin + 2) % LookOptions.skins.count,
                     shirt: look.shirt == 4 ? 3 : 4, pattern: 2, cap: 0)
         player2Name = defaults.string(forKey: p + "p2.name") ?? "Player 2"
+        guideLook = Look.load(defaults, p + "guide.") ?? GuideView.startLook
+        hasGoldenStick = defaults.bool(forKey: p + "hasGoldenStick")
+        dreamStreak = defaults.integer(forKey: p + "dreamStreak")
+        dreamBest = defaults.integer(forKey: p + "dreamBest")
         paidLevels = Set(defaults.array(forKey: p + "paidLevels") as? [Int] ?? [])
         hasCharacter = defaults.bool(forKey: p + "hasCharacter")
         let won = Set(defaults.array(forKey: p + "completedLevels") as? [Int] ?? [])
@@ -765,6 +781,7 @@ final class GameState {
     /// Badges for simply opening the game: the demo badge, and Halloween on October 31.
     func awardLaunchBadges() {
         award(.joinedDemo)
+        checkWholeGame()
         let today = Calendar.current.dateComponents([.month, .day], from: Date())
         if today.month == 10 && today.day == 31 { award(.pumpkins) }
     }
@@ -791,6 +808,14 @@ final class GameState {
     func checkName() {
         let name = playerName.lowercased()
         if Self.cussWords.contains(where: { name.contains($0) }) { award(.southPark) }
+    }
+
+    /// "how did we get here": the whole game done, every level and Side Levels 1 to 5.
+    /// (The Room, Side Level 6, needs the Guide's Hat, so it doesn't count.)
+    var wholeGameDone: Bool { allLevelsWon && (1...5).allSatisfy { completedSide.contains($0) } }
+
+    func checkWholeGame() {
+        if wholeGameDone { award(.wholeGame) }
     }
 
     /// Every level, every accessory and every other badge. Not possible until all 10 levels exist.
@@ -971,6 +996,10 @@ final class GameState {
         look.store(defaults, p)
         player2Look.store(defaults, p + "p2.")
         defaults.set(player2Name, forKey: p + "p2.name")
+        guideLook.store(defaults, p + "guide.")
+        defaults.set(hasGoldenStick, forKey: p + "hasGoldenStick")
+        defaults.set(dreamStreak, forKey: p + "dreamStreak")
+        defaults.set(dreamBest, forKey: p + "dreamBest")
         defaults.set(Array(paidLevels), forKey: p + "paidLevels")
         defaults.set(hasCharacter, forKey: p + "hasCharacter")
         defaults.set(Array(completedLevels), forKey: p + "completedLevels")

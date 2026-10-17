@@ -416,6 +416,8 @@ struct MomView: View {
     /// Hit by a toy, the bat or vines: dizzy, with stars circling.
     var stunned = false
     var walking = false
+    /// Her face, like the player's: cross when she's after you, surprised when stunned, and so on.
+    var expression: Mood = .cross
 
     /// Mom's pink dressing gown. Auntie wears the same cut in teal.
     var robe = Color(red: 0.85, green: 0.45, blue: 0.60)
@@ -461,15 +463,10 @@ struct MomView: View {
                 }
             }
             .offset(y: -100)
-            // Cross, sleepy face
-            Capsule().fill(.black).frame(width: 14, height: 3).rotationEffect(.degrees(15)).offset(x: -12, y: -70)
-            Capsule().fill(.black).frame(width: 14, height: 3).rotationEffect(.degrees(-15)).offset(x: 12, y: -70)
-            BlinkingEye(size: 7, phase: 1.3).offset(x: -11, y: -62)
-            BlinkingEye(size: 7, phase: 1.3).offset(x: 11, y: -62)
-            Capsule().fill(.black.opacity(0.7)).frame(width: 18, height: 4).offset(y: -46)
+            GrownUpFace(mood: stunned ? .surprised : expression, gap: 22, phase: 1.3).offset(y: -62)
             if stunned {
                 StunStars().offset(y: -112)
-            } else {
+            } else if expression == .cross || expression == .surprised {
                 Text("?!").font(.game(34, .heavy)).foregroundStyle(.yellow).offset(x: 50, y: -110)
             }
         }
@@ -487,6 +484,71 @@ struct BlinkingEye: View {
             Capsule().fill(.black).frame(width: size, height: closed ? max(1.5, size * 0.22) : size)
         }
         .frame(width: size, height: size)
+    }
+}
+
+/// A grown-up's face: the same eight moods as the player's (eyes, eyebrows and mouth),
+/// drawn a size bigger. The middle of the eyes is the middle of the view.
+struct GrownUpFace: View {
+    var mood: Mood = .calm
+    /// From one eye to the other.
+    var gap: CGFloat = 22
+    var size: CGFloat = 7
+    /// Staggers the blinking between characters.
+    var phase = 0.0
+    var brows: Color = .black
+    /// Some faces (Dad's moustache) draw their own mouth area.
+    var showMouth = true
+    /// Moves the mouth down (below a moustache) and the eyebrows up (above glasses).
+    var mouthDrop: CGFloat = 0
+    var browRise: CGFloat = 0
+
+    var body: some View {
+        TimelineView(.periodic(from: Date(timeIntervalSinceReferenceDate: 0), by: 0.14)) { ctx in
+            let blink = (ctx.date.timeIntervalSinceReferenceDate + phase).truncatingRemainder(dividingBy: 3.6) < 0.16
+            face(blink: blink)
+        }
+        .frame(width: gap + 40, height: 50)
+    }
+
+    private func face(blink: Bool) -> some View {
+        // Eyes: wider when surprised or scared, half shut when sleepy, narrow when sneaky.
+        let tall: CGFloat = blink ? max(1.5, size * 0.22) : mood == .surprised || mood == .scared ? size * 1.35 : mood == .sleepy ? size * 0.35 : mood == .sneaky ? size * 0.55 : size
+        let tilt: Double = mood == .worried || mood == .scared ? -16 : mood == .cross ? 18 : mood == .sneaky ? 8 : 0
+        let lift: CGFloat = mood == .surprised ? -5 : mood == .scared ? -3 : 0
+        return ZStack {
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                Capsule().fill(.black).frame(width: size, height: tall).offset(x: side * gap / 2)
+                Capsule().fill(brows).frame(width: size * 2, height: 3)
+                    .rotationEffect(.degrees(side * tilt * -1))
+                    .offset(x: side * gap / 2, y: -size - 4 + lift - browRise)
+            }
+            if showMouth { mouth.offset(y: size + 9 + mouthDrop) }
+        }
+    }
+
+    @ViewBuilder private var mouth: some View {
+        let w = gap * 0.8
+        switch mood {
+        case .happy:
+            Circle().trim(from: 0.05, to: 0.45).stroke(.black.opacity(0.75), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: w).offset(y: -w / 2 + 2)
+        case .worried:
+            Circle().trim(from: 0.6, to: 0.9).stroke(.black.opacity(0.7), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: w).offset(y: w / 2 + 2)
+        case .scared, .surprised:
+            Ellipse().fill(Color(red: 0.35, green: 0.10, blue: 0.12)).frame(width: w * 0.5, height: mood == .scared ? w * 0.55 : w * 0.45)
+        case .sneaky:
+            Capsule().fill(.black.opacity(0.7)).frame(width: w * 0.65, height: 3).rotationEffect(.degrees(-10)).offset(x: 3)
+        case .sleepy:
+            Ellipse().fill(Color(red: 0.35, green: 0.10, blue: 0.12).opacity(0.8)).frame(width: 6, height: 6)
+        case .cross:
+            Circle().trim(from: 0.62, to: 0.88).stroke(.black.opacity(0.75), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: w).offset(y: w / 2 + 2)
+        case .calm:
+            Circle().trim(from: 0.1, to: 0.4).stroke(.black.opacity(0.7), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: w * 0.85).offset(y: -w * 0.42 + 2)
+        }
     }
 }
 

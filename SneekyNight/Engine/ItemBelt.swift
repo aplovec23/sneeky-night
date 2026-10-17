@@ -7,12 +7,12 @@ import Observation
 @Observable
 final class ItemBelt {
     enum Item: Int, CaseIterable {
-        case vines, lightning, toy, bat, cloud, hat, hose
+        case vines, lightning, toy, bat, cloud, hat, hose, stick
 
         /// The letter on the button, from the one list of keys in `GameKey`.
         var key: String { GameKey.items[rawValue].label }
-        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill", "drop.fill"][rawValue] }
-        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color, Boost.waterHose.color][rawValue] }
+        var symbol: String { ["leaf.arrow.triangle.circlepath", "bolt.fill", "teddybear.fill", "figure.baseball", "cloud.fill", "hat.widebrim.fill", "drop.fill", "wand.and.stars"][rawValue] }
+        var color: Color { [Color.green, .yellow, .pink, .orange, Color(red: 0.45, green: 0.7, blue: 1), GuidesHat.color, Boost.waterHose.color, Palette.gold][rawValue] }
     }
 
     var owned: Set<Item> = []
@@ -25,6 +25,8 @@ final class ItemBelt {
     /// Set by the level: stun whoever is around for this many seconds (second value: Mom only).
     /// Returns false when there's nobody to stun.
     @ObservationIgnored var stun: (Double, Bool) -> Bool = { _, _ in false }
+    /// Set by a level that wants more from the golden stick than the usual (Level 3 clears every room).
+    @ObservationIgnored var goldenStick: () -> Void = {}
     @ObservationIgnored private var boosts: Set<Boost> = []
     @ObservationIgnored private var upgrades: [Stat: Int] = [:]
     @ObservationIgnored private var maxHP = 100.0
@@ -42,6 +44,7 @@ final class ItemBelt {
         if boosts.contains(.cloud) { owned.insert(.cloud) }
         if boosts.contains(.waterHose) { owned.insert(.hose) }
         if boosts.contains(.guidesHat) { owned.insert(.hat) }
+        if game.hasGoldenStick { owned.insert(.stick) }
         hatOn = false
         upgrades = game.upgrades
         maxHP = game.maxHP
@@ -53,6 +56,7 @@ final class ItemBelt {
 
     func reset() {
         cooldowns = [:]
+        engine?.grownUpsGone = false
         lightningLeft = 0
         hatOn = false
         engine?.maxHP = maxHP
@@ -128,6 +132,17 @@ final class ItemBelt {
             } else {
                 engine.say("There's nobody here to spray.")
             }
+        case .stick:
+            // The golden stick (from The Room): every obstacle in the room vanishes, and so do Mom,
+            // Dad and everyone else who could catch you, for the rest of the try. Once per try.
+            // Each level also removes its own extras (strangers, guards, pests...) in `goldenStick`.
+            guard engine.running else { return }
+            cooldowns[.stick] = 1_000_000
+            engine.things.removeAll { $0.hazard != nil }
+            engine.grownUpsGone = true
+            goldenStick()
+            Sound.magic.play()
+            engine.say("THE GOLDEN STICK! Mom, Dad, everything in my way... gone.", seconds: 2.5)
         case .lightning:
             guard engine.running else { return }
             lightningLeft = 25

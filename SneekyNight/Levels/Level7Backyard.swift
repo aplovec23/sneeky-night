@@ -60,6 +60,13 @@ final class BackyardModel {
         ("compost", "compost", 3150, "the compost bin"), ("bush3", "bush", 3480, "the hedge"), ("birdhouse", "birdhouse", 3860, "the birdhouse post"),
     ]
 
+    /// Auntie's face: cross when you step on a cat or make a racket, worried while the kittens are loose.
+    var auntieMood: Mood {
+        if banner?.hasPrefix("Auntie") == true { return .cross }
+        if auntieSays?.hasPrefix("Oh no") == true { return .worried }
+        return .happy
+    }
+
     var cornerText: String {
         switch phase {
         case .wash: hasHose ? "Mud washed: \(washed)/\(mudCount)" : "Pick up the hose by the tap"
@@ -508,7 +515,7 @@ struct BackyardLevelView: View {
             ForEach(engine.things.filter { !$0.onFloor }) { thing in
                 wallItem(thing).anchored(at: thing.pos)
             }
-            AuntieView(walking: model.auntieWalking)
+            AuntieView(walking: model.auntieWalking, expression: model.auntieMood)
                 .scaleEffect(x: model.auntieRight ? 1 : -1, y: 1)
                 .anchored(at: model.auntie)
             if let text = model.auntieSays {

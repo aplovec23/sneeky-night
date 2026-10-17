@@ -71,13 +71,30 @@ struct HealthBar: View {
 
 /// The Guide: he turns up in practice mode to help you through a level.
 struct GuideView: View {
-    static let look = Look(gender: .boy, skin: 2, shirt: 7, pattern: 3, cap: 0,
-                           accessory: Accessory(id: "guide-hat", family: .topHat, name: "Guide's Hat", color: GuidesHat.color))
+    @Environment(GameState.self) private var game
+    /// His hat. It's part of him: Customize the Guide can change everything except this.
+    static let hat = Accessory(id: "guide-hat", family: .topHat, name: "Guide's Hat", color: GuidesHat.color)
+    /// How he looks until you customize him.
+    static let startLook: Look = {
+        var look = Look(gender: .boy, skin: 2, shirt: 7, pattern: 3, cap: 0, accessory: hat)
+        look.face = Mood.happy.rawValue   // a cheerful sort
+        return look
+    }()
     var walking = false
+    /// His face right now. Nil: his usual face (picked in Customize the Guide).
+    var expression: Mood?
+
+    /// The look you gave him, always with his hat on (and none of your boosts).
+    static func dressed(_ look: Look) -> Look {
+        var guide = look
+        guide.accessory = hat
+        guide.boosts = []
+        return guide
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            CharacterView(look: Self.look, facingRight: true, walking: walking)
+            CharacterView(look: Self.dressed(game.guideLook), facingRight: true, walking: walking, expression: expression)
             // His lantern
             VStack(spacing: 0) {
                 Rectangle().fill(Color(white: 0.3)).frame(width: 3, height: 14)

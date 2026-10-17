@@ -166,6 +166,8 @@ final class DungeonModel {
             }
         }
         let player = engine.player
+        // The golden stick clears the sliding spikes away for the rest of the visit.
+        if engine.grownUpsGone && !spikes.isEmpty { spikes = [] }
         for i in spikes.indices {
             spikes[i].pos.x += spikes[i].speed * CGFloat(dt) * Difficulty.current.hazardSpeed
             if spikes[i].pos.x >= spikes[i].range.upperBound || spikes[i].pos.x <= spikes[i].range.lowerBound {

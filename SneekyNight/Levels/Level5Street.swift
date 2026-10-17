@@ -116,6 +116,13 @@ final class StreetModel {
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
         belt.stun = { [weak self] seconds, momOnly in self?.chase.stun(seconds, momOnly: momOnly) ?? false }
+        // The golden stick: every stranger, guard, worker and rat is gone too, on every floor.
+        belt.goldenStick = { [weak self] in
+            guard let self else { return }
+            walkers = []
+            streetWalkers = []
+            lobbyWalkers = []
+        }
         chase.engine = engine
         chase.entrance = { [weak self] _ in self?.entrance() ?? (.zero, 2) }
         chase.setBanner = { [weak self] in self?.banner = $0 }
@@ -322,7 +329,7 @@ final class StreetModel {
         case .upstairs:
             width = Self.corridorWidth
             spawn = from == .office ? CGPoint(x: Self.roomDoors[uncleDoorIndex] + 60, y: 610) : CGPoint(x: 260, y: 610)
-            walkers = Self.corridorWorker(floor: currentFloor)
+            walkers = engine.grownUpsGone ? [] : Self.corridorWorker(floor: currentFloor)
             saved[.upstairs] = corridorThings(floor: currentFloor)
         case .office:
             width = Self.officeWidth
@@ -593,6 +600,7 @@ final class StreetModel {
 
     /// While you carry snacks, a rat shows up now and then. It takes one snack and leaves a present.
     private func tickRats(_ dt: Double) {
+        guard !engine.grownUpsGone else { return }
         let player = engine.player
         if snacks > 0, !walkers.contains(where: { $0.kind == .rat }) {
             ratIn -= dt
@@ -655,7 +663,7 @@ final class StreetModel {
     /// Mom cooks at the stove, walks to the sink, washes up, and walks back. She only sees
     /// what's in front of her while she walks; cooking, her back is turned.
     private func tickMom(_ dt: Double) {
-        guard !chase.active else { return }
+        guard !chase.active, !engine.grownUpsGone else { return }
         let player = engine.player
         switch cooking {
         case .atStove, .atSink:
@@ -851,7 +859,7 @@ struct StreetLevelView: View {
             ForEach(engine.things.filter { !$0.onFloor }) { thing in
                 wallItem(thing).anchored(at: thing.pos)
             }
-            if model.area == .kitchen && !model.chase.active {
+            if model.area == .kitchen && !model.chase.active && !model.engine.grownUpsGone {
                 CookingMomView(backTurned: model.cooking == .atStove || model.cooking == .atSink,
                                facingRight: model.cooking == .toSink, walking: model.cooking == .toSink || model.cooking == .toStove)
                     .anchored(at: CGPoint(x: model.momX, y: 585))

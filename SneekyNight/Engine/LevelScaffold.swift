@@ -115,7 +115,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                         }
                         extra()
                         if adminOpen {
-                            AdminPanel(context: AdminContext(engine: engine, chase: chase, restart: onRestart,
+                            AdminPanel(context: AdminContext(engine: engine, chase: chase, belt: belt, restart: onRestart,
                                                              confetti: { confetti += 1 }),
                                        onClose: { adminOpen = false; engine.paused = false })
                         }
@@ -297,6 +297,8 @@ struct LevelScaffold<World: View, Extra: View>: View {
                                 Text("\(Int(engine.flyLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.white)
                             } else if item == .lightning && belt.lightningLeft > 0 {
                                 Text("\(Int(belt.lightningLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.yellow)
+                            } else if item == .stick && wait > 0 {
+                                Text("USED").font(.game(14, .heavy)).foregroundStyle(.white.opacity(0.85)).offset(y: 22)
                             } else if wait > 0 {
                                 Text("\(Int(wait.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.white)
                             }

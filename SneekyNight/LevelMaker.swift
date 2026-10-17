@@ -168,9 +168,9 @@ struct CustomItemArt: View {
         case "laser": LaserBeamView(on: !open).offset(y: 150)
         case "mom": MomView(stunned: false, walking: false)
         case "dad": DadView(stunned: false, walking: false, laughing: false)
-        case "brother": CharacterView(look: SiblingBuddy.look, facingRight: false).scaleEffect(0.78, anchor: .bottom)
+        case "brother": CharacterView(look: SiblingBuddy.look, facingRight: false, expression: .happy).scaleEffect(0.78, anchor: .bottom)
         case "uncle": PersonView(outfit: .uncle).scaleEffect(x: -1, y: 1)
-        case "friend": CharacterView(look: CustomItemArt.friendLook, facingRight: false)
+        case "friend": CharacterView(look: CustomItemArt.friendLook, facingRight: false, expression: .happy)
         case "ghost": GhostView()
         case "guide": GuideView()
         case "guard": PersonView(outfit: .guardian)
@@ -637,6 +637,14 @@ final class CustomLevelModel {
     @ObservationIgnored var onWin: () -> Void = {}
     @ObservationIgnored var onPlayAgain: (() -> Void)?
     @ObservationIgnored var winTitle = "You did it!"
+    /// Called when a try is lost: caught, out of time, or restarted before the end.
+    @ObservationIgnored var onLose: () -> Void = {}
+    /// Dreams: how much harder this one is (1.01 × for every dream in your streak). Walkers,
+    /// moving hazards and whoever chases you are this much faster. Set it, then call `reset()`.
+    @ObservationIgnored var hardness: CGFloat = 1
+    /// Shown after the level's name in the title (the dream streak).
+    var titleExtra = ""
+    @ObservationIgnored private var tryStarted = false
     @ObservationIgnored var winMessage: String?
     @ObservationIgnored var onEdit: () -> Void = {}
     @ObservationIgnored private var keyBoxes: Set<String> = []
@@ -679,6 +687,15 @@ final class CustomLevelModel {
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
         belt.stun = { [weak self] seconds, momOnly in self?.chase.stun(seconds, momOnly: momOnly) ?? false }
+        // The golden stick: Dad, strangers, spikes, guards, workers, lasers and lava are all gone too.
+        belt.goldenStick = { [weak self] in
+            guard let self else { return }
+            dadHere = false
+            strangers = []
+            watchers = []
+            lasers = []
+            engine.things.removeAll { $0.kind == "lava" }
+        }
         chase.engine = engine
         chase.entrance = { [weak self] _ in
             guard let self else { return (.zero, 2) }
@@ -711,6 +728,10 @@ final class CustomLevelModel {
     }
 
     func reset() {
+        // Restarting in the middle of a try counts as losing it.
+        if tryStarted && !over { onLose() }
+        tryStarted = true
+        chase.speedScale = hardness
         var things: [Thing] = []
         keyBoxes = []
         strangers = []
@@ -746,7 +767,7 @@ final class CustomLevelModel {
             case "car":
                 var car = Thing(id: id, kind: "car", pos: pos, footprint: CGSize(width: 60, height: 26), hazard: .toy)
                 car.patrol = max(60, pos.x - 220)...min(level.width - 60, pos.x + 220)
-                car.speed = 220
+                car.speed = 220 * hardness
                 things.append(car)
             case "lava":
                 things.append(Thing(id: id, kind: "lava", pos: pos, footprint: CGSize(width: 120, height: 40), flat: true))
@@ -754,11 +775,11 @@ final class CustomLevelModel {
             case "spikes", "stranger":
                 strangers.append(Walker(id: n, kind: item.kind == "spikes" ? .rat : .stranger, pos: pos,
                                         range: max(60, pos.x - 240)...min(level.width - 60, pos.x + 240),
-                                        speed: item.kind == "spikes" ? 170 : 110, style: n))
+                                        speed: (item.kind == "spikes" ? 170 : 110) * hardness, style: n))
             case "guard", "worker":
                 watchers.append(Walker(id: n, kind: item.kind == "guard" ? .guardian : .worker, pos: pos,
                                        range: max(60, pos.x - 300)...min(level.width - 60, pos.x + 300),
-                                       speed: item.kind == "guard" ? 115 : 100, style: n))
+                                       speed: (item.kind == "guard" ? 115 : 100) * hardness, style: n))
                 watcherLines[n] = line(of: item)
             default: break
             }
@@ -972,6 +993,7 @@ final class CustomLevelModel {
 
     private func end(_ title: String, _ message: String) {
         over = true
+        onLose()
         banner = nil
         engine.running = false
         Sound.caught.play()
@@ -1038,7 +1060,7 @@ struct CustomLevelStage: View {
     var dream = false
 
     var body: some View {
-        LevelScaffold(engine: model.engine, title: "\(dream ? "Dream · " : "")\(model.level.name)  ·  keys \(model.inventory.count)/\(model.level.keyCount)",
+        LevelScaffold(engine: model.engine, title: "\(dream ? "Dream · " : "")\(model.level.name)  ·  keys \(model.inventory.count)/\(model.level.keyCount)\(model.titleExtra)",
                       inventory: model.inventory, popup: model.popup, banner: model.banner, belt: model.belt,
                       chase: model.chase, creativeHere: model.level.creative == true, onHome: onExit, onRestart: model.reset, onHint: model.hint) {
             world.allowsHitTesting(false)
@@ -1056,13 +1078,13 @@ struct CustomLevelStage: View {
                 CustomItemArt(kind: thing.kind, open: model.doorOpen, hiding: model.hidingIn == thing.id)
                     .anchored(at: thing.pos)
             }
-            if let mom = model.mom, !model.chase.momOut {
-                MomView(stunned: false, walking: false)
+            if let mom = model.mom, !model.chase.momOut, !model.engine.grownUpsGone {
+                MomView(stunned: false, walking: false, expression: .sleepy)
                     .overlay(alignment: .top) { Text("Zzz").font(.game(26, .heavy)).foregroundStyle(.white.opacity(0.8)).offset(x: 40, y: -6) }
                     .anchored(at: CGPoint(x: mom.x, y: 590))
             }
             if model.dadHere && !model.chase.active {
-                DadView(stunned: false, walking: true, laughing: false)
+                DadView(stunned: false, walking: true, laughing: false, expression: .sneaky)
                     .scaleEffect(x: model.dadRight ? 1 : -1, y: 1)
                     .anchored(at: CGPoint(x: model.dadX, y: model.level.items.first { $0.kind == "dad" }?.y ?? 610))
             }

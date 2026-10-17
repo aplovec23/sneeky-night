@@ -107,6 +107,11 @@ final class HallwayModel {
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
         belt.stun = { [weak self] seconds, momOnly in self?.stunGrownUp(seconds, momOnly: momOnly) ?? false }
+        belt.goldenStick = { [weak self] in
+            guard let self else { return }
+            dadVisible = false
+            if banner?.contains("Dad") == true { banner = nil }
+        }
         engine.onDefaultInteract = { [weak self] in self?.talkToBrother() }
         chase.engine = engine
         chase.entrance = { [weak self] who in self?.entrance(for: who) ?? (.zero, 2) }
@@ -696,7 +701,8 @@ final class HallwayModel {
     private func startDadPatrol() {
         let thisRun = run
         let thisPatrol = dadRun
-        func stillHere() -> Bool { run == thisRun && dadRun == thisPatrol && room == .momRoom }
+        // The golden stick ends Dad's checks for the rest of the try.
+        func stillHere() -> Bool { run == thisRun && dadRun == thisPatrol && room == .momRoom && !engine.grownUpsGone }
         Task { @MainActor in
             while true {
                 var wait = Double.random(in: 9...15)
@@ -950,7 +956,7 @@ struct HallwayLevelView: View {
             floorLayer
             mom
             if model.dadVisible {
-                DadView(stunned: model.dadStunned)
+                DadView(stunned: model.dadStunned, expression: .sneaky)
                     .anchored(at: CGPoint(x: 150, y: 600))
                     .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
             }
@@ -1028,6 +1034,8 @@ struct HallwayLevelView: View {
 
 struct KeypadView: View {
     var hint = "Find the paper with the code if you don't know it."
+    /// The longest code it takes (The Room's lock has 10).
+    var maxLength = 6
     let onSubmit: (String) -> Bool
     let onCancel: () -> Void
     @State private var entry = ""
@@ -1050,7 +1058,7 @@ struct KeypadView: View {
                 HStack(spacing: 16) {
                     TextField("CODE", text: $entry)
                         .focused($focused)
-                        .font(.system(size: 40, weight: .heavy, design: .monospaced))
+                        .font(.system(size: maxLength > 6 ? 34 : 40, weight: .heavy, design: .monospaced))
                         .multilineTextAlignment(.center)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
@@ -1058,11 +1066,11 @@ struct KeypadView: View {
                         .submitLabel(.done)
                         .onSubmit(submit)
                         .padding(.vertical, 10)
-                        .frame(width: 260)
+                        .frame(width: maxLength > 6 ? 330 : 260)
                         .background(.white, in: RoundedRectangle(cornerRadius: 16))
                         .offset(x: wrong ? -8 : 0)
                         .onChange(of: entry) { _, new in
-                            if new.count > 6 { entry = String(new.prefix(6)) }
+                            if new.count > maxLength { entry = String(new.prefix(maxLength)) }
                             if wrong { wrong = false }
                         }
                     BigButton(title: "Enter", action: submit)

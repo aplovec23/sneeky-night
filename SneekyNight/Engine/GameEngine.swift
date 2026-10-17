@@ -170,6 +170,8 @@ final class GameEngine {
     var noclip = false
     /// The Guide's Hat is on: you walk through things too.
     var phasing = false
+    /// The golden stick was used this try: Mom, Dad and every other grown-up who could catch you are gone.
+    var grownUpsGone = false
     /// Creative mode: grown-ups can't catch you.
     var ghost = false
     /// Nobody can catch or hurt you: practice mode, or the creative "ghost" command.

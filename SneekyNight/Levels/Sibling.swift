@@ -18,6 +18,16 @@ final class SiblingBuddy {
     /// How many times you've taunted him while he's awake (5 = the Crashout badge).
     var taunts = 0
 
+    /// His face: cross once you've taunted him silly, worried on the way there, happy while you
+    /// chat or walk together, and still sleepy just after he wakes up.
+    var mood: Mood {
+        if taunts >= 5 { return .cross }
+        if taunts >= 3 { return .worried }
+        if talking { return .happy }
+        if state == .awake { return .sleepy }
+        return walking ? .happy : .calm
+    }
+
     static let look = Look(gender: .boy, skin: 1, shirt: 3, pattern: 4, cap: 0)
     static let bedside = CGPoint(x: 1010, y: 610)
 
@@ -83,7 +93,7 @@ struct BuddyView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(.black.opacity(0.4), in: Capsule())
-            CharacterView(look: SiblingBuddy.look, facingRight: buddy.facingRight, walking: buddy.walking)
+            CharacterView(look: SiblingBuddy.look, facingRight: buddy.facingRight, walking: buddy.walking, expression: buddy.mood)
         }
         .scaleEffect(0.78, anchor: .bottom)
         .frame(width: 110, height: 150, alignment: .bottom)

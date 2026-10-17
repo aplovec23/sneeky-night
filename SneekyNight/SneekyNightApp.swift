@@ -13,7 +13,7 @@ struct SneekyNightApp: App {
 
 enum Screen: Equatable {
     case title, customize, levels, badges, sounds, saves, settings, updateLog, sideLevels, side(Int), level(Int)
-    case difficulty, multiplayer, lore, maker, makerEdit(String), makerPlay(String), customizeP2
+    case difficulty, multiplayer, lore, maker, makerEdit(String), makerPlay(String), customizeP2, customizeGuide
 }
 
 struct ContentView: View {
@@ -51,6 +51,8 @@ struct ContentView: View {
                 FitToPhone(night: true) { UpdateLogView(onBack: { screen = .title }) }
             case .sideLevels:
                 FitToPhone(night: true) { SideLevelsView(onPlay: { screen = .side($0) }, onBack: { screen = .title }) }
+            case .side(6):
+                RoomLevelView(onExit: { screen = .sideLevels })
             case .side(5):
                 DreamLevelView(onExit: { screen = .sideLevels })
             case .side(4):
@@ -67,6 +69,8 @@ struct ContentView: View {
                 FitToPhone(night: true) { MultiplayerView(onBack: { screen = .title }, onCustomize: { screen = .customizeP2 }) }
             case .customizeP2:
                 FitToPhone(night: true) { CustomizeView(onDone: { screen = .multiplayer }, onBack: { screen = .multiplayer }, player2: true) }
+            case .customizeGuide:
+                FitToPhone(night: true) { CustomizeView(onDone: { screen = .customize }, onBack: { screen = .customize }, guide: true) }
             case .lore:
                 FitToPhone(night: true) { LoreView(onBack: { screen = .title }) }
             case .maker:
@@ -90,7 +94,7 @@ struct ContentView: View {
                 }, onBack: {
                     playAfterCustomize = false
                     screen = .title
-                }, onSounds: { screen = .sounds }) }
+                }, onSounds: { screen = .sounds }, onGuide: { screen = .customizeGuide }) }
             case .sounds:
                 FitToPhone(night: true) { SoundSettingsView(onBack: { screen = .customize }) }
             case .levels:

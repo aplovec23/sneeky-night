@@ -246,6 +246,12 @@ struct SideLevelsView: View {
                         card(5, "Dreams", "moon.zzz.fill",
                              "You fell asleep. Every dream is different: a random room, random keys, hazards and dream people. Find every key and get out of the door to wake up.",
                              game.dreamRequirements)
+                        // Only players with the Guide's Hat can even see this one.
+                        if game.boosts.contains(.guidesHat) {
+                            card(6, "The Room", "wand.and.stars",
+                                 "A room only the Guide's Hat can show you. Its vault has a 10-letter code, and no clues anywhere. Guess it right and the golden stick is yours, no rooftop needed.",
+                                 [("Own the Guide's Hat", true)])
+                        }
                     }
                     .padding(.bottom, 20)
                 }
@@ -421,7 +427,7 @@ struct CreativeSwitch: View {
             }
             .buttonStyle(PressableStyle())
             if game.creativeActive {
-                Text("Tap the wand in a level for the admin panel (45 commands).")
+                Text("Tap the wand in a level for the admin panel (60 commands).")
                     .font(.game(14, .semibold))
                     .foregroundStyle(.white.opacity(0.8))
             }
@@ -536,7 +542,7 @@ struct LoreView: View {
         ("Your brother", "teddybear.fill", .green,
          "Leaves squeaky toys everywhere and lends you his favourite one. If he's following you when Mom catches up, he throws his toy at her. Once."),
         ("The Guide", "lightbulb.fill", GuidesHat.color,
-         "Turns up in practice mode with a lantern that never goes out. Now he walks right into the room and says \"Follow me!\", then leads you to the next place you need to go. His hat is said to hold ten and a half times his power."),
+         "Turns up in practice mode with a lantern that never goes out. Now he walks right into the room and says \"Follow me!\", then leads you to the next place you need to go. His hat is said to hold ten and a half times his power. You can give him a new look in Customize, but the hat never comes off."),
         ("Grandpa", "figure.walk.motion", .orange,
          "The reason for everything. His knees won't make the trip to the Lantern Festival this year, so you promised to bring a lantern home for him."),
         ("The snack dog", "pawprint.fill", .brown,
@@ -553,8 +559,18 @@ struct LoreView: View {
          "Show up while you carry snacks. Each one steals a snack and leaves a present: an accessory, and 1 time in 10 a boost."),
         ("The owl", "bird.fill", .teal,
          "Lives by the chimney on the roof. It winks at you. Nobody knows why."),
+        ("Auntie", "house.fill", .teal,
+         "Mom's big sister, in a teal dressing gown with her grey hair in a bun. She knows where Grandpa is, but first: ten chores. She thanks you for her kittens with the hose she's had for thirty years."),
+        ("Auntie's cats", "cat.fill", .orange,
+         "Ginger and fond of sleeping right where you need to walk. Step on one and Auntie takes time off your clock. On Hard they wake up and wander."),
+        ("The Orb Shop keeper", "cart.fill", .purple,
+         "Runs the striped stall at the dungeon entrance. Takes orbs for upgrades, accessories and demo exclusives, and never says where the orbs go."),
+        ("The Friend", "figure.2.arms.open", .green,
+         "Only lives in the Level Maker. Sneaking out too, apparently, and always up for a race to the exit."),
+        ("The Ghost", "theatermasks.fill", .white,
+         "Also only in the Level Maker. Says \"Boooo\", then admits it's friendly, and points you to the keys."),
         ("Level Maker friends", "hammer.fill", .purple,
-         "Uncle, a Friend, a friendly Ghost, the Guide, Guards and Workers can only be placed in your own levels. Give each of them their own line."),
+         "Uncle, the Friend, the Ghost, the Guide, Guards and Workers can be placed in your own levels. Give each of them their own line."),
         ("Auntie's kittens", "cat.fill", .orange,
          "Auntie's newest litter. They slip out of their pen at the first splash of the hose, and they love bushes, sheds and old doghouses."),
         ("Dream people", "moon.zzz.fill", .purple,
@@ -587,8 +603,8 @@ struct LoreView: View {
          "On the roof. +6% speed each for the rest of Level 3, up to +60%."),
         ("Orbs", "circle.hexagongrid.fill", .cyan,
          "Mined from glowing rocks in the dungeon and spent at the Orb Shop."),
-        ("The golden stick", "questionmark", Palette.gold,
-         "Very, very rare. It's on the roof... sometimes."),
+        ("The golden stick (K)", "wand.and.stars", Palette.gold,
+         "Very, very rare. It's on the roof... sometimes. Or behind the vault in The Room, for those with the Guide's Hat and the right 10-letter code. Kept for good, press K once per try: every obstacle in the room is gone, and so are Mom, Dad, strangers, guards, workers, rats, pests, the gate dogs, spikes, lasers and lava, for the rest of the try."),
         ("Drawing paper", "pencil.and.scribble", .white,
          "Next to the toy chest in your brother's room. Grab a sheet and draw whatever you like; the game stops while you draw."),
         ("The hotel elevator", "arrow.up.arrow.down.square.fill", .orange,
@@ -863,7 +879,7 @@ enum ItemLore {
         "Skill papers": "Pages from Grandpa's old notebook, \"How to Be Quick and Quiet\". Someone tore them out and hid them at the bottom of boxes.",
         "Star balls": "Tiny pieces of shooting stars. They only land on roofs where somebody is awake to catch them.",
         "Orbs": "They grow inside the dungeon rocks like pearls in a shell. The shopkeeper says the first one was found by a lost miner's lantern.",
-        "The golden stick": "Nobody made it and nobody has found it twice. Some say the owl drops it. The owl isn't saying.",
+        "The golden stick (K)": "Nobody made it and nobody has found it twice. Some say the owl drops it. The owl isn't saying.",
         "The hotel elevator": "Built the same year as the hotel. Uncle swears it rearranges the floors when nobody is looking.",
         "Water spray (J)": "Auntie's hose has watered her backyard for thirty years. It sprays harder than it looks.",
         "Drawing paper": "Auntie posts your brother a fresh pad every birthday. He draws on the first page and saves the rest \"for something important\".",
@@ -907,6 +923,16 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Sneeky Nights: The Room", [
+            "New side level for Guide's Hat owners only: The Room. Its vault has a 10-letter code and no clues. Guess it and the golden stick is yours, no rooftop needed.",
+            "The golden stick is kept for good: press K once per try in any level. Every obstacle in the room vanishes, and so do Mom, Dad and every other grown-up, plus strangers, guards, workers, rats, pests, the gate dogs, spikes, lasers and lava. In Level 3 it clears the whole house.",
+            "Dreams have a streak: every dream you beat in a row counts, and each one after that is 1.01× harder (a shorter clock, more hazards, faster everything). Lose one or leave it unfinished and the streak starts again. Your best streak is kept.",
+            "Creative mode has 5 new commands (60 in all): Golden stick, Bring everyone back, Go to the next goal, Hide right here, and Disco.",
+            "Everyone has expressions now, like you: Mom, Dad, Auntie, Uncle, your brother, the Guide, strangers, guards and workers. Cross when they chase you, sneaky when they search, surprised, happy, sleepy...",
+            "Customize the Guide: give him a new look (in Customize Character). His hat stays on.",
+            "Every character is in the Lore now, including Auntie, her cats, the Orb Shop keeper, the Friend and the Ghost.",
+            "New badge: \"how did we get here\". Complete the whole game: every level, and Side Levels 1 to 5.",
+        ]),
         ("Sneeky Nights: Auntie's backyard", [
             "Level 7: Auntie's Backyard. The first level with an entry fee: 32 badges, and 10 orbs paid at the gate. Wash the mud off the yard with the hose, then find every missing kitten.",
             "Auntie thanks you with a new boost only she gives: the Water Hose. Press J to spray whoever is chasing you so they can't see. In Level 4 it waters five plants at once.",

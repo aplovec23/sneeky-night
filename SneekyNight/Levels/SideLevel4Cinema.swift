@@ -637,21 +637,24 @@ struct MovieScreen: View {
 
     @ViewBuilder private func actor(_ who: MovieActor, right: Bool, walking: Bool, crouching: Bool, taunting: Bool, excited: Bool) -> some View {
         switch who {
-        case .you: CharacterView(look: look, facingRight: right, walking: walking, crouching: crouching, taunting: taunting)
+        case .you: CharacterView(look: look, facingRight: right, walking: walking, crouching: crouching, taunting: taunting,
+                                 expression: excited ? .happy : crouching ? .sneaky : nil)
         case .brother:
-            CharacterView(look: SiblingBuddy.look, facingRight: right, walking: walking, crouching: crouching, taunting: taunting)
+            CharacterView(look: SiblingBuddy.look, facingRight: right, walking: walking, crouching: crouching, taunting: taunting,
+                          expression: excited ? .happy : crouching ? .sneaky : nil)
                 .scaleEffect(0.8, anchor: .bottom)
-        case .mom: MomView(stunned: false, walking: walking).scaleEffect(x: right ? 1 : -1, y: 1)
+        // On screen everyone's an actor: happy in the exciting bits, calm otherwise.
+        case .mom: MomView(stunned: false, walking: walking, expression: excited ? .happy : .calm).scaleEffect(x: right ? 1 : -1, y: 1)
         // Dad laughs when he's pleased with himself.
-        case .dad: DadView(stunned: false, walking: walking, laughing: excited).scaleEffect(x: right ? 1 : -1, y: 1)
-        case .uncle: PersonView(outfit: .uncle, walking: walking).scaleEffect(x: right ? 1 : -1, y: 1)
-        case .auntie: AuntieView(walking: walking).scaleEffect(x: right ? 1 : -1, y: 1)
-        case .guide: GuideView(walking: walking).scaleEffect(x: right ? 1 : -1, y: 1)
+        case .dad: DadView(stunned: false, walking: walking, laughing: excited, expression: .calm).scaleEffect(x: right ? 1 : -1, y: 1)
+        case .uncle: PersonView(outfit: .uncle, walking: walking, expression: excited ? .surprised : .happy).scaleEffect(x: right ? 1 : -1, y: 1)
+        case .auntie: AuntieView(walking: walking, expression: excited ? .surprised : .happy).scaleEffect(x: right ? 1 : -1, y: 1)
+        case .guide: GuideView(walking: walking, expression: excited ? .surprised : .happy).scaleEffect(x: right ? 1 : -1, y: 1)
         case .dog: DogView(happy: excited || walking).scaleEffect(x: right ? 1 : -1, y: 1)
         // Cats curl up and sleep when nothing is happening.
         case .cat: SleepingCatView(awake: walking || excited || taunting, facingRight: right)
         case .rat: RatView().scaleEffect(x: right ? 1 : -1, y: 1)
-        case .stranger: PersonView(outfit: .stranger(2), walking: walking).scaleEffect(x: right ? 1 : -1, y: 1)
+        case .stranger: PersonView(outfit: .stranger(2), walking: walking, expression: excited ? .surprised : .cross).scaleEffect(x: right ? 1 : -1, y: 1)
         }
     }
 }

@@ -35,6 +35,12 @@ final class Chase {
     /// Seconds of talking left. Nobody chases you while they talk.
     var talkLeft = 0.0
     var talking: Bool { talkLeft > 0 }
+    /// Their face: calm while they talk, sneaky while they hunt for where you hid, cross while they chase you.
+    var mood: Mood {
+        if talking { return .calm }
+        if let engine, engine.concealed, !sawHide { return .sneaky }
+        return .cross
+    }
 
     @ObservationIgnored weak var engine: GameEngine?
     /// Where they walk in for the room you're in, and how many seconds that takes.
@@ -87,8 +93,10 @@ final class Chase {
 
     var momOut: Bool { active && who == .mom }
     var dadOut: Bool { active && who == .dad }
+    /// Multiplies how fast they walk (a long dream streak makes them quicker).
+    @ObservationIgnored var speedScale: CGFloat = 1
     private var speed: CGFloat {
-        Difficulty.current.chaserSpeed(base: who == .mom ? 225 : 245, yours: engine?.pace ?? 290)
+        Difficulty.current.chaserSpeed(base: who == .mom ? 225 : 245, yours: engine?.pace ?? 290) * speedScale
     }
 
     func reset() {
@@ -113,7 +121,8 @@ final class Chase {
     /// Someone heard or saw you. Does nothing if a chase is already on.
     /// Pass `from` when they're already standing somewhere in this room.
     func alarm(_ who: Who, _ text: String, from start: CGPoint? = nil) {
-        guard let engine, !active else { return }
+        // After the golden stick there's nobody left to come after you.
+        guard let engine, !active, !engine.grownUpsGone else { return }
         self.who = who
         active = true
         timeLeft = Self.giveUpAfter
@@ -193,6 +202,7 @@ final class Chase {
     }
 
     func tick(_ dt: Double) {
+        if active, engine?.grownUpsGone == true { reset() }
         // Your character's face: worried while someone is looking for you, scared when they're close.
         if let engine {
             let close = active && visible && hypot(engine.player.x - pos.x, engine.player.y - pos.y) < 330
@@ -434,19 +444,20 @@ struct ChaserView: View {
         if chase.active && chase.visible {
             Group {
                 if chase.who == .mom {
-                    MomView(stunned: chase.stunned > 0, walking: chase.walking)
+                    MomView(stunned: chase.stunned > 0, walking: chase.walking, expression: chase.mood)
                 } else {
-                    DadView(stunned: chase.stunned > 0, walking: chase.walking, laughing: chase.laughing > 0)
+                    DadView(stunned: chase.stunned > 0, walking: chase.walking, laughing: chase.laughing > 0, expression: chase.mood)
                 }
             }
             .scaleEffect(x: chase.talking && !chase.facingRight ? -1 : 1, y: 1)
             .anchored(at: chase.pos)
             if let other = chase.partner {
                 Group {
+                    // Walking over they're surprised to see each other up; then they just talk.
                     if other == .mom {
-                        MomView(stunned: false, walking: chase.partnerWalking)
+                        MomView(stunned: false, walking: chase.partnerWalking, expression: chase.partnerWalking ? .surprised : .calm)
                     } else {
-                        DadView(stunned: false, walking: chase.partnerWalking, laughing: false)
+                        DadView(stunned: false, walking: chase.partnerWalking, laughing: false, expression: chase.partnerWalking ? .surprised : .calm)
                     }
                 }
                 .anchored(at: chase.partnerPos)

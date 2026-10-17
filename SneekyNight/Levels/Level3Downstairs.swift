@@ -137,6 +137,7 @@ final class DownstairsModel {
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
         belt.stun = { [weak self] seconds, momOnly in self?.stunGrownUp(seconds, momOnly: momOnly) ?? false }
+        belt.goldenStick = { [weak self] in self?.stickDeletes() }
         chase.engine = engine
         chase.entrance = { [weak self] who in self?.entrance(for: who) ?? (.zero, 2) }
         chase.setBanner = { [weak self] in self?.banner = $0 }
@@ -729,7 +730,8 @@ final class DownstairsModel {
     }
 
     private func usePhone() {
-        guard mom != .asleep || chase.momOut else {
+        // With Mom deleted by the golden stick, her phone is just lying there.
+        guard mom != .asleep || chase.momOut || momDeleted else {
             engine.say("Mom's phone is right by her hand. I have to get her out of the room first!")
             return
         }
@@ -767,7 +769,8 @@ final class DownstairsModel {
 
     /// Where Dad is standing if he's in this room right now.
     private var dadHere: Bool {
-        (room == .momRoom && (dadChecking || banner?.contains("Footsteps") == true))
+        guard !engine.grownUpsGone else { return false }
+        return (room == .momRoom && (dadChecking || banner?.contains("Footsteps") == true))
             || (room == .downstairs && dad == .walkingToGarage)
             || (room == .basement && dad == .basement && abs(engine.player.x - dadX) < 800)
     }
@@ -929,7 +932,7 @@ final class DownstairsModel {
 
     /// Until he's lured away, Dad checks Mom's room now and then, like in Level 2.
     private func tickDadCheck(_ dt: Double) {
-        guard dad == .upstairs, room == .momRoom else { return }
+        guard dad == .upstairs, room == .momRoom, !engine.grownUpsGone else { return }
         dadCheckTime -= dt
         switch dadCheckStage {
         case 0:
@@ -966,6 +969,11 @@ final class DownstairsModel {
     }
 
     private func tickDad(_ dt: Double) {
+        // After the golden stick, Dad isn't around to walk anywhere: skip straight to "he's busy".
+        if engine.grownUpsGone {
+            if dad == .comingDown || dad == .walkingToGarage { banner = nil; dadInGarage() }
+            return
+        }
         switch dad {
         case .comingDown:
             let before = Int(lureTime.rounded(.up))
@@ -1068,7 +1076,11 @@ final class DownstairsModel {
     }
 
     private func tickYard(_ dt: Double) {
-        guard room == .yard, !doorLocked else { return }
+        // Nobody to come out after you once the golden stick has been used.
+        guard room == .yard, !doorLocked, !engine.grownUpsGone else {
+            if engine.grownUpsGone, banner?.hasPrefix("Lock the door") == true { banner = nil }
+            return
+        }
         lockTime -= dt
         banner = "Lock the door before Dad gets out! \(Int(max(lockTime, 0).rounded(.up)))"
         if lockTime <= 0 {
@@ -1138,14 +1150,23 @@ final class DownstairsModel {
     private func useGoldenStick() {
         award(.goldenStick)
         Sound.magic.play()
+        engine.grownUpsGone = true
+        stickDeletes()
+        show(Popup(title: "THE GOLDEN STICK", message: "It deleted every obstacle in the house... and Mom, and Dad. Nothing can stop you now.",
+                   symbol: "wand.and.stars", color: Palette.gold, button: "Whoa") {})
+    }
+
+    /// What the golden stick deletes: every obstacle in every room of the house, and Mom.
+    /// Also what pressing K does here, if you got the stick from The Room.
+    private func stickDeletes() {
         momDeleted = true
+        dadChecking = false
+        if banner?.contains("Dad") == true || banner?.contains("Footsteps") == true || banner?.hasPrefix("Lock the door") == true { banner = nil }
         if chase.momOut { chase.reset() }
         momOut = false
         mom = .asleep
         for (key, things) in saved { saved[key] = things.filter { $0.hazard == nil } }
         engine.things.removeAll { $0.hazard != nil }
-        show(Popup(title: "THE GOLDEN STICK", message: "It deleted every obstacle in the house... and Mom. Nothing can stop you now.",
-                   symbol: "wand.and.stars", color: Palette.gold, button: "Whoa") {})
     }
 
     // MARK: Getting caught
@@ -1461,15 +1482,18 @@ struct DownstairsLevelView: View {
     @ViewBuilder private var grownUps: some View {
         let pop = AnyTransition.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity)
         ChaserView(chase: model.chase)
-        if model.room == .hallway && model.momOut {
-            MomView(walking: model.mom != .atToy).anchored(at: CGPoint(x: model.momX, y: 605))
+        if model.room == .hallway && model.momOut && !model.engine.grownUpsGone {
+            // Puzzled by the toy; half asleep walking there and back.
+            MomView(walking: model.mom != .atToy, expression: model.mom == .atToy ? .surprised : .sleepy).anchored(at: CGPoint(x: model.momX, y: 605))
         }
         if model.room == .momRoom && model.dadChecking {
-            DadView(stunned: model.dadStunned).anchored(at: CGPoint(x: 150, y: 600)).transition(pop)
+            DadView(stunned: model.dadStunned, expression: .sneaky).anchored(at: CGPoint(x: 150, y: 600)).transition(pop)
         }
-        if (model.room == .downstairs && model.dad == .walkingToGarage) || (model.room == .basement && model.dad == .basement)
-            || (model.room == .yard && model.phase == .over && !model.doorLocked) {
-            DadView(stunned: model.dadStunned).anchored(at: CGPoint(x: model.dadX, y: 605))
+        if !model.engine.grownUpsGone && ((model.room == .downstairs && model.dad == .walkingToGarage) || (model.room == .basement && model.dad == .basement)
+            || (model.room == .yard && model.phase == .over && !model.doorLocked)) {
+            // Sleepy on his way to the garage, watchful in the basement, cross when you lock him in... nearly.
+            DadView(stunned: model.dadStunned, expression: model.room == .yard ? .cross : model.dad == .walkingToGarage ? .sleepy : .sneaky)
+                .anchored(at: CGPoint(x: model.dadX, y: 605))
         }
         if model.room == .yard {
             DogView(happy: true).anchored(at: CGPoint(x: 560, y: 575))

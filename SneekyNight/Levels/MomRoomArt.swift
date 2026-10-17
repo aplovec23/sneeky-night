@@ -199,6 +199,8 @@ struct DadView: View {
     var walking = false
     /// You taunted him and he thought it was funny.
     var laughing = false
+    /// His face, like the player's. Laughing always makes him happy.
+    var expression: Mood = .calm
 
     private let pajamas = Color(red: 0.35, green: 0.45, blue: 0.70)
     private let skin = Color(red: 0.94, green: 0.76, blue: 0.62)
@@ -251,19 +253,18 @@ struct DadView: View {
                     Circle().stroke(.black, lineWidth: 3).frame(width: 20)
                 }
                 .offset(y: -68)
-                HStack(spacing: 18) {
-                    BlinkingEye(size: 6, phase: 2.4)
-                    BlinkingEye(size: 6, phase: 2.4)
-                }
-                .offset(y: -68)
-                Capsule().fill(Color(red: 0.25, green: 0.18, blue: 0.12)).frame(width: 30, height: 8).offset(y: -50)
+                GrownUpFace(mood: laughing ? .happy : stunned ? .surprised : expression, gap: 24, size: 6, phase: 2.4,
+                            brows: Color(red: 0.25, green: 0.18, blue: 0.12), mouthDrop: 11, browRise: 4)
+                    .offset(y: -66)
+                // His moustache sits over the top of his mouth.
+                Capsule().fill(Color(red: 0.25, green: 0.18, blue: 0.12)).frame(width: 30, height: 8).offset(y: -52)
             }
             .offset(y: shake)
             if stunned {
                 StunStars().offset(y: -116)
                 Image(systemName: "leaf.fill").font(.system(size: 30)).foregroundStyle(.green).offset(y: 30)
             } else {
-                Text(laughing ? "Ha ha!" : "Hmm?").font(.game(28, .heavy)).foregroundStyle(.yellow).offset(x: 62, y: -118)
+                Text(laughing ? "Ha ha!" : expression == .cross ? "Hey!" : "Hmm?").font(.game(28, .heavy)).foregroundStyle(.yellow).offset(x: 62, y: -118)
             }
         }
     }

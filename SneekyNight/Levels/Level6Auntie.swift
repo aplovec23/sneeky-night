@@ -60,6 +60,11 @@ final class AuntieModel {
     private static func amount(_ easy: Int, _ mild: Int, _ hard: Int) -> Int { Difficulty.current.pick(easy: easy, mild: mild, hard: hard) }
 
     var choresDone: Int { chores.filter(\.finished).count }
+    /// Auntie's face: cross when you step on a cat, make a racket or dawdle; happy otherwise.
+    var auntieMood: Mood {
+        if banner?.hasPrefix("MEOW") == true || banner?.hasPrefix("Auntie") == true || auntieSays == "Keep up, dear!" { return .cross }
+        return .happy
+    }
     var nextChore: Chore? { chores.first { !$0.finished } }
 
     /// The list along the bottom of the screen.
@@ -515,7 +520,7 @@ struct AuntieLevelView: View {
                 wallItem(thing).anchored(at: thing.pos)
             }
             if model.floor == .down {
-                AuntieView(walking: model.auntieWalking)
+                AuntieView(walking: model.auntieWalking, expression: model.auntieMood)
                     .scaleEffect(x: model.auntieRight ? 1 : -1, y: 1)
                     .anchored(at: model.auntie)
                 if let text = model.auntieSays {
@@ -574,9 +579,11 @@ struct AuntieLevelView: View {
 /// Auntie: in her dressing gown, hair in a bun, glasses pushed up (when she can find them).
 struct AuntieView: View {
     var walking = false
+    /// She's a cheerful one, unless you step on her cats.
+    var expression: Mood = .happy
 
     var body: some View {
-        MomView(stunned: false, walking: walking, robe: Color(red: 0.20, green: 0.55, blue: 0.55))
+        MomView(stunned: false, walking: walking, expression: expression, robe: Color(red: 0.20, green: 0.55, blue: 0.55))
             .overlay(alignment: .top) {
                 // A grey bun on top
                 Circle().fill(Color(white: 0.78)).frame(width: 36).offset(x: -8, y: -14)

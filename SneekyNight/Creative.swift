@@ -4,6 +4,8 @@ import SwiftUI
 struct AdminContext {
     let engine: GameEngine
     let chase: Chase?
+    /// The level's items (for the golden stick's extras in each level).
+    let belt: ItemBelt?
     let restart: () -> Void
     let confetti: () -> Void
 }
@@ -16,7 +18,7 @@ struct AdminCommand: Identifiable {
     let run: @MainActor (AdminContext) -> Void
 }
 
-/// Creative mode's 55 commands. They change the level you're in, your status, the sky and the music.
+/// Creative mode's 60 commands. They change the level you're in, your status, the sky and the music.
 /// Status commands stack: press "Speed ×2" three times for ×8.
 @MainActor
 enum Admin {
@@ -141,6 +143,46 @@ enum Admin {
                     try? await Task.sleep(for: .seconds(0.5))
                     c.confetti()
                 }
+            }
+        }
+        // New in The Room update (5)
+        add("Grown-ups", "Golden stick", "wand.and.stars") { c in
+            // Everything the golden stick does, without needing to own it: obstacles, Mom, Dad and the rest, gone.
+            c.engine.things.removeAll { $0.hazard != nil }
+            c.engine.grownUpsGone = true
+            c.belt?.goldenStick()
+            c.chase?.setBanner(nil)
+            Sound.magic.play()
+        }
+        add("Grown-ups", "Bring everyone back", "person.3.fill") { c in
+            c.engine.grownUpsGone = false
+            c.engine.say("Everyone's back... (restart the level for the obstacles)", seconds: 2.5)
+        }
+        add("Level", "Go to the next goal", "location.fill") { c in
+            // Wherever the Guide would lead you next: a key, a box, a door.
+            if let spot = c.engine.guideGoal() {
+                c.engine.player = CGPoint(x: min(max(spot.x, 60), c.engine.width - 60), y: min(max(spot.y + 20, c.engine.floor.lowerBound), c.engine.floor.upperBound))
+            } else {
+                c.engine.say("Nothing to go to here!", seconds: 1.5)
+            }
+        }
+        add("You", "Hide right here", "eye.slash.circle.fill") { c in
+            // No closet needed. Press it again to come out.
+            c.engine.hidden.toggle()
+            Sound.closet.play()
+        }
+        add("Music & fun", "Disco", "light.beacon.max.fill") { c in
+            // The sky flashes through the day for a few seconds, with confetti and fast music.
+            SoundPlayer.shared.setMusic(rate: 1.5)
+            let before = Settings.shared.skyOverride
+            Task { @MainActor in
+                for n in 0..<12 {
+                    Settings.shared.skyOverride = Sky.allCases[n % Sky.allCases.count]
+                    if n % 3 == 0 { c.confetti() }
+                    try? await Task.sleep(for: .seconds(0.4))
+                }
+                Settings.shared.skyOverride = before
+                SoundPlayer.shared.setMusic(rate: 1)
             }
         }
         return list.enumerated().map { AdminCommand(id: $0.offset + 1, group: $0.element.0, name: $0.element.1, symbol: $0.element.2, run: $0.element.3) }

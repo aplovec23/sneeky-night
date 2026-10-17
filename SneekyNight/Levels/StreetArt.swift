@@ -9,6 +9,18 @@ struct PersonView: View {
 
     let outfit: Outfit
     var walking = false
+    /// Their face. Nil: the usual one for their job (grumpy strangers, watchful guards, cheerful Uncle).
+    var expression: Mood?
+
+    private var mood: Mood {
+        if let expression { return expression }
+        switch outfit {
+        case .stranger: return .cross
+        case .guardian: return .sneaky
+        case .worker: return .calm
+        case .uncle: return .happy
+        }
+    }
 
     private var coat: Color {
         switch outfit {
@@ -120,21 +132,12 @@ struct PersonView: View {
     }
 
     @ViewBuilder private var face: some View {
-        BlinkingEye(size: 7, phase: 1.7).position(x: 78, y: 52)
-        BlinkingEye(size: 7, phase: 1.7).position(x: 92, y: 52)
-        switch outfit {
-        case .stranger:
-            // Grumpy eyebrows
-            Capsule().fill(.black.opacity(0.75)).frame(width: 12, height: 3).rotationEffect(.degrees(18)).position(x: 77, y: 44)
-            Capsule().fill(.black.opacity(0.75)).frame(width: 12, height: 3).rotationEffect(.degrees(-18)).position(x: 93, y: 44)
-            Capsule().fill(.black.opacity(0.6)).frame(width: 14, height: 3).position(x: 86, y: 67)
-        case .uncle:
+        GrownUpFace(mood: mood, gap: 14, size: 7, phase: 1.7, brows: .black.opacity(0.75)).position(x: 85, y: 52)
+        if outfit == .uncle {
             // A big friendly moustache and glasses on his forehead
-            Capsule().fill(Color(white: 0.45)).frame(width: 26, height: 8).position(x: 86, y: 65)
-            Circle().stroke(Color(white: 0.2), lineWidth: 2).frame(width: 13).position(x: 76, y: 34)
-            Circle().stroke(Color(white: 0.2), lineWidth: 2).frame(width: 13).position(x: 92, y: 34)
-        default:
-            Capsule().fill(.black.opacity(0.6)).frame(width: 12, height: 3).position(x: 86, y: 67)
+            Capsule().fill(Color(white: 0.45)).frame(width: 26, height: 8).position(x: 86, y: 63)
+            Circle().stroke(Color(white: 0.2), lineWidth: 2).frame(width: 13).position(x: 76, y: 32)
+            Circle().stroke(Color(white: 0.2), lineWidth: 2).frame(width: 13).position(x: 92, y: 32)
         }
     }
 }
@@ -320,7 +323,8 @@ struct CookingMomView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            MomView(stunned: false, walking: walking)
+            // Humming happily at the stove; watchful while she walks.
+            MomView(stunned: false, walking: walking, expression: backTurned ? .happy : .sneaky)
                 .scaleEffect(x: facingRight ? 1 : -1, y: 1)
                 .brightness(backTurned ? -0.12 : 0)
             if backTurned {

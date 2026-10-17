@@ -309,6 +309,10 @@ struct CustomizeView: View {
     var onSounds: () -> Void = {}
     /// Multiplayer: this screen dresses player 2 instead (no boosts, no custom sounds).
     var player2 = false
+    /// Opens Customize the Guide.
+    var onGuide: () -> Void = {}
+    /// This screen dresses the Guide instead: no name, no boosts, and his hat always stays on.
+    var guide = false
 
     /// The parts of the screen, as tabs along the top.
     enum Tab: String, CaseIterable {
@@ -334,7 +338,7 @@ struct CustomizeView: View {
     @FocusState private var nameFocused: Bool
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
-    private var tabs: [Tab] { player2 ? [.body, .hair, .clothes, .accessories] : Tab.allCases }
+    private var tabs: [Tab] { guide ? [.body, .hair, .clothes] : player2 ? [.body, .hair, .clothes, .accessories] : Tab.allCases }
 
     var body: some View {
         ZStack {
@@ -343,18 +347,37 @@ struct CustomizeView: View {
             HStack(spacing: 40) {
                 // Live preview
                 VStack(spacing: 16) {
-                    Text(trimmedName.isEmpty ? (player2 ? "Player 2" : "Your character") : trimmedName)
+                    Text(guide ? "The Guide" : trimmedName.isEmpty ? (player2 ? "Player 2" : "Your character") : trimmedName)
                         .font(.game(34, .heavy))
                         .foregroundStyle(.white)
                     ZStack(alignment: .bottom) {
                         Ellipse().fill(.white.opacity(0.15)).frame(width: 220, height: 50).offset(y: 20)
-                        CharacterView(look: look, facingRight: true, walking: false)
+                        CharacterView(look: guide ? GuideView.dressed(look) : look, facingRight: true, walking: false)
                             .scaleEffect(2.1, anchor: .bottom)
                     }
                     .frame(width: 300, height: 380, alignment: .bottom)
                     BigButton(title: "Done", symbol: "checkmark", action: save)
                         .opacity(trimmedName.isEmpty ? 0.4 : 1)
                         .disabled(trimmedName.isEmpty)
+                    if !guide && !player2 {
+                        // The Guide can have a new look too (not his hat, though).
+                        Button {
+                            SoundPlayer.shared.tap()
+                            onGuide()
+                        } label: {
+                            Label("Customize the Guide", systemImage: "hat.widebrim.fill")
+                                .font(.game(18))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16).padding(.vertical, 9)
+                                .background(GuidesHat.color.opacity(0.8), in: Capsule())
+                        }
+                        .buttonStyle(PressableStyle())
+                    }
+                    if guide {
+                        Text("His hat stays on: it's part of him.")
+                            .font(.game(17, .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
                     if trimmedName.isEmpty {
                         Text("Type a name to finish.")
                             .font(.game(18, .medium))
@@ -365,7 +388,7 @@ struct CustomizeView: View {
 
                 // Choices, one tab at a time
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(player2 ? "Customize Player 2" : "Customize Character")
+                    Text(guide ? "Customize the Guide" : player2 ? "Customize Player 2" : "Customize Character")
                         .font(.game(40, .heavy))
                         .foregroundStyle(.white)
                     tabBar
@@ -400,8 +423,8 @@ struct CustomizeView: View {
         }
         .animation(.spring(duration: 0.3), value: look)
         .onAppear {
-            look = player2 ? game.player2Look : game.look
-            name = player2 ? game.player2Name : game.playerName
+            look = guide ? game.guideLook : player2 ? game.player2Look : game.look
+            name = guide ? "Guide" : player2 ? game.player2Name : game.playerName
         }
         .onChange(of: photoPick) { _, item in
             guard let item else { return }
@@ -437,7 +460,7 @@ struct CustomizeView: View {
 
     // MARK: Tabs
 
-    @ViewBuilder private var bodyTab: some View {
+    private var nameSection: some View {
         section("Name") {
             TextField("Type a name", text: $name)
                 .focused($nameFocused)
@@ -453,6 +476,10 @@ struct CustomizeView: View {
                     if new.count > 12 { name = String(new.prefix(12)) }
                 }
         }
+    }
+
+    @ViewBuilder private var bodyTab: some View {
+        if !guide { nameSection }
         section("Boy or girl") {
             HStack(spacing: 14) {
                 ForEach(Gender.allCases, id: \.self) { g in
@@ -677,6 +704,11 @@ struct CustomizeView: View {
 
     private func save() {
         guard !trimmedName.isEmpty else { return }
+        if guide {
+            game.guideLook = GuideView.dressed(look)
+            onDone()
+            return
+        }
         if player2 {
             var picked = look
             picked.boosts = []

@@ -96,6 +96,17 @@ final class GardenModel {
             if let item = ItemBelt.Item(rawValue: i) { self?.belt.use(item) }
         }
         belt.stun = { [weak self] seconds, momOnly in self?.chase.stun(seconds, momOnly: momOnly) ?? false }
+        // The golden stick: Dad stops checking, every pest flies off, and the gate dogs wander away.
+        belt.goldenStick = { [weak self] in
+            guard let self else { return }
+            engine.things.removeAll { $0.kind == "pest" }
+            pests = 0
+            dogsHere = false
+            dadStage = 0
+            dadTime = 120
+            if banner?.contains("Dad") == true { banner = nil }
+            checkDone()
+        }
         chase.engine = engine
         chase.entrance = { [weak self] _ in
             self?.area == .maze ? (CGPoint(x: Self.center(0, 0).x - 60, y: Self.center(0, 0).y), 3) : (CGPoint(x: 110, y: 600), 4)
@@ -524,6 +535,8 @@ final class GardenModel {
         if area == .maze {
             waterPlants(dt)
             tickPests(dt)
+            // The golden stick sends the gate dogs off for good.
+            if engine.grownUpsGone { dogsHere = false; dogTime = 1_000 }
             dogTime -= dt
             if dogTime <= 0 {
                 dogsHere.toggle()
@@ -538,7 +551,7 @@ final class GardenModel {
                 engine.addNoise(7)
             }
         }
-        if !chase.active { tickDad(dt) }
+        if !chase.active && !engine.grownUpsGone { tickDad(dt) }
     }
 
     private func waterPlants(_ dt: Double) {
@@ -576,7 +589,7 @@ final class GardenModel {
 
     private func tickPests(_ dt: Double) {
         // No new pests once every plant is watered, or while Dad is on his way or checking.
-        guard watered < Self.plantCount, dadStage == 0, !chase.active else { return }
+        guard watered < Self.plantCount, dadStage == 0, !chase.active, !engine.grownUpsGone else { return }
         pestTime -= dt
         guard pestTime <= 0 else { return }
         pestTime = 25
