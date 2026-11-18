@@ -105,6 +105,8 @@
     // For testing from the browser console: SN.current.level is the level being played.
     SN.current = { game, level, runner };
   }
+  // Also for testing: SN.startLevel(3) opens a level straight away.
+  SN.startLevel = startLevel;
 
   wireToasts();
   game.awardLaunchBadges();

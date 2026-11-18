@@ -54,15 +54,23 @@ struct PersonView: View {
                 .rotationEffect(.degrees(swing * 20), anchor: .top).position(x: 60, y: 205)
             Capsule().fill(Color(white: 0.20)).frame(width: 22, height: 82)
                 .rotationEffect(.degrees(-swing * 20), anchor: .top).position(x: 80, y: 205)
-            // Back arm, body, front arm
-            arm.rotationEffect(.degrees(-swing * 22), anchor: .top).position(x: 64, y: 132)
+            // Back arm, body, front arm. Like the player, the near arm hangs on the side they face
+            // (guards and workers hold it out in front, with the flashlight or the mop).
+            arm.rotationEffect(.degrees(-swing * 22), anchor: .top).position(x: 54, y: 132)
             RoundedRectangle(cornerRadius: 22).fill(coat).frame(width: 74, height: 104).position(x: 70, y: 128)
             extras
-            arm.rotationEffect(.degrees(frontArmAngle(swing)), anchor: .top).position(x: 78, y: 132)
+            arm.rotationEffect(.degrees(frontArmAngle(swing)), anchor: .top).position(x: holdsSomething ? 78 : 92, y: 132)
             // Head
             Circle().fill(skin).frame(width: 60, height: 60).position(x: 72, y: 52)
             hat
             face
+        }
+    }
+
+    private var holdsSomething: Bool {
+        switch outfit {
+        case .guardian, .worker: true
+        default: false
         }
     }
 

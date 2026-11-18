@@ -112,8 +112,10 @@ struct CharacterView: View {
         // Crouching: hands out in front, creeping forward one after the other.
         // Scared: hands up by the face.
         let scared = mood == .scared && !taunting && !crouching
-        let backArm = taunting ? 160 + wiggle * 20 : crouching ? -24 + swing * 12 : scared ? -120 + idle * 6 : -swing * 30 + 5 + idle * 4
-        let frontArm = taunting ? -160 - wiggle * 20 : crouching ? -42 - swing * 12 : scared ? -135 - idle * 6 : swing * 30 - 6 - idle * 4
+        // Taunting: both hands up beside the head, waving. Scared: arms stiff and a little forward, trembling.
+        let tremble = scared ? sin(time * 38) * 3 : 0
+        let backArm = taunting ? 140 + wiggle * 18 : crouching ? -24 + swing * 12 : scared ? -14 + tremble : -swing * 30 + 5 + idle * 4
+        let frontArm = taunting ? -140 - wiggle * 18 : crouching ? -42 - swing * 12 : scared ? -26 - tremble : swing * 30 - 6 - idle * 4
         // Crouching is its own pose: a squat with the knees out in front, the upper body lowered
         // and leaning forward over them, rising and sinking a little with each breath and step.
         // The shoes stay on the floor line (y 150, the same as standing), so the feet never sink.
