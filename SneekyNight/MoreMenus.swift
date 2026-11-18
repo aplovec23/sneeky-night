@@ -923,6 +923,14 @@ struct UpdateLogView: View {
 
     /// Newest first.
     static let updates: [(title: String, notes: [String])] = [
+        ("Sneeky Nights: Level badges and dream names", [
+            "New badges: Level 5, 6, 7, 8, 9 and 10, one for winning each level. Levels you already won count straight away. Levels 8 to 10 say \"soon\" until they're out.",
+            "Smoother play: the clock, noise meter and buttons only redraw when they change, so moving around takes much less work every frame.",
+            "Friendlier faces: softer, rounder eyes with a shine, gentler eyebrows, and a scared face gets a little drop of sweat instead of a scream. Mom, Dad, Auntie, Uncle, the strangers and the Ghost got friendlier faces too.",
+            "Fixed your arms: they hang on the side you're facing, so your hand goes where you go instead of sitting on your tummy. You also only turn left or right when you're really going sideways.",
+            "Every dream has a name made of random words, like \"Floating Moon\" or \"Crooked Melting Kitchen\" (a 50/50 chance of an extra word), and its wallpaper, sky, moons and floor are made up by a randomizer.",
+            "Fixed the weird crouch: it's a real squat now, knees in front and both feet flat on the floor.",
+        ]),
         ("Sneeky Nights: The Room", [
             "New side level for Guide's Hat owners only: The Room. Its vault has a 10-letter code and no clues. Guess it and the golden stick is yours, no rooftop needed.",
             "The golden stick is kept for good: press K once per try in any level. Every obstacle in the room vanishes, and so do Mom, Dad and every other grown-up, plus strangers, guards, workers, rats, pests, the gate dogs, spikes, lasers and lava. In Level 3 it clears the whole house.",

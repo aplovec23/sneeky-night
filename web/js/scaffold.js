@@ -12,7 +12,12 @@ SN.LevelRunner = class {
     this.engine = level.engine;
     this.onHome = onHome;
     this.canvas = document.getElementById('stage');
-    this.ctx = this.canvas.getContext('2d');
+    // Opaque: the room always covers it, so the browser never blends it with the page behind.
+    this.ctx = this.canvas.getContext('2d', { alpha: false });
+    // How many canvas pixels per screen point. Starts sharp and drops a step at a time if the
+    // device can't keep up (see tune); remembered for the rest of the visit.
+    this.renderScale = Math.min(SN.LevelRunner.renderScale ?? 2, SN.LevelRunner.sharpest());
+    this.tuning = { gaps: [], total: 0, warm: false, before: null, prev: null };
     this.ui = document.getElementById('ui');
     this.pauseOpen = false;
     this.alive = true;
@@ -24,6 +29,9 @@ SN.LevelRunner = class {
     e.onMenuKey = k => { if (k === 'menu') this.home(); if (k === 'restart') this.level.retry(); if (k === 'hint') this.level.hint(); };
     this.resize = () => this.layout();
     window.addEventListener('resize', this.resize);
+    // The stage is the screen above the controls; their height changes when item buttons appear.
+    const controls = this.v('controls');
+    if (controls && window.ResizeObserver) { this.watch = new ResizeObserver(() => this.measureStage()); this.watch.observe(controls); }
     this.layout();
     e.running = true;
     requestAnimationFrame(() => this.frame());
@@ -35,6 +43,7 @@ SN.LevelRunner = class {
     this.alive = false;
     this.engine.running = false;
     window.removeEventListener('resize', this.resize);
+    if (this.watch) this.watch.disconnect();
     this.hud.remove();
   }
 
@@ -70,7 +79,9 @@ SN.LevelRunner = class {
         <div data-v="pause"></div>
       </div>`);
     this.ui.appendChild(this.hud);
-    this.v = name => this.hud.querySelector(`[data-v="${name}"]`);
+    // The HUD's parts, looked up once.
+    const parts = {};
+    this.v = name => name in parts ? parts[name] : (parts[name] = this.hud.querySelector(`[data-v="${name}"]`));
     this.hud.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', () => {
       SN.sound.tap();
       const a = b.dataset.a;
@@ -209,17 +220,61 @@ SN.LevelRunner = class {
 
   // ---------- Layout and drawing ----------
   layout() {
-    const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.round(window.innerWidth * dpr);
-    this.canvas.height = Math.round(window.innerHeight * dpr);
-    this.dpr = dpr;
+    const s = this.renderScale;
+    this.canvas.width = Math.round(window.innerWidth * s);
+    this.canvas.height = Math.round(window.innerHeight * s);
+    this.dpr = s;
+    this.measureStage();
+  }
+
+  measureStage() {
+    const controls = this.v('controls');
+    const floating = !controls || controls.classList.contains('floating');
+    this.stageH = floating ? window.innerHeight : window.innerHeight - controls.getBoundingClientRect().height;
+  }
+
+  /// The sharpest the canvas is drawn: the screen's own pixels, but never more than 2 per point
+  /// (on phones with 3, a third more pixels to fill would look the same).
+  static sharpest() { return Math.min(Math.max(window.devicePixelRatio || 1, 1), 2); }
+
+  /// Keeps the game smooth on slower devices. Every second or so, looks at how long frames take;
+  /// if they're slow (under about 50 a second), draws the canvas a step less sharp (fewer pixels to
+  /// fill, which is what costs the most). If a step doesn't make frames faster (the browser is
+  /// holding them back, as in Low Power Mode), it goes back and stops trying.
+  tune(gap) {
+    const T = this.tuning;
+    if (SN.LevelRunner.tuned || this.pauseOpen || this.level.popup || gap > 0.25) return;
+    T.gaps.push(gap); T.total += gap;
+    if (T.total < 1.2 || T.gaps.length < 20) return;
+    // The average frame, leaving out the slowest few (a hiccup isn't a slow device).
+    const sorted = T.gaps.sort((a, b) => a - b).slice(0, Math.ceil(T.gaps.length * 0.95));
+    const avg = sorted.reduce((a, b) => a + b, 0) / sorted.length;
+    T.gaps = []; T.total = 0;
+    if (!T.warm) { T.warm = true; return; }   // the first second of a level is setting up
+    if (T.before !== null) {
+      const helped = avg < T.before * 0.93;
+      T.before = null;
+      if (!helped) { this.setRenderScale(T.prev); SN.LevelRunner.tuned = true; return; }
+    }
+    if (avg > 0.02 && this.renderScale > 1) {
+      T.before = avg; T.prev = this.renderScale;
+      this.setRenderScale(Math.max(1, this.renderScale - 0.25));
+    }
+  }
+
+  setRenderScale(s) {
+    this.renderScale = s;
+    SN.LevelRunner.renderScale = s;
+    this.layout();
   }
 
   frame() {
     if (!this.alive) return;
     const now = SN.now();
-    const dt = Math.min(now - this.last, 1 / 20);
+    const gap = now - this.last;
+    const dt = Math.min(gap, 1 / 20);
     this.last = now;
+    this.tune(gap);
     this.engine.step(dt);
     if (this.level.belt) this.level.belt.tick(this.engine.running ? dt : 0);
     this.draw(now);
@@ -229,10 +284,8 @@ SN.LevelRunner = class {
 
   draw(t) {
     const ctx = this.ctx, e = this.engine;
-    const W = window.innerWidth, H = window.innerHeight;
-    const controls = this.v('controls');
-    const floating = !controls || controls.classList.contains('floating');
-    const stageH = floating ? H : H - controls.getBoundingClientRect().height;
+    const W = window.innerWidth;
+    const stageH = this.stageH;
     const cropTop = 80, roomH = 700 - cropTop;
     // Fit the room's height; show more of the room's width when the screen is wide.
     const scale = Math.min(stageH / roomH, W / 760);
@@ -254,8 +307,11 @@ SN.LevelRunner = class {
     // The sky's colour over the room (darker at night).
     const [r, g, b, amount] = SN.palette.shade();
     const strength = (this.level.shadeAmount ?? 0.22) * amount;
-    ctx.fillStyle = SN.rgb(r, g, b, strength);
-    ctx.fillRect(0, 0, e.width, e.height);
+    // Only over the part of the room on screen, and not at all when there's nothing to see.
+    if (strength > 0.004) {
+      ctx.fillStyle = SN.rgb(r, g, b, strength);
+      ctx.fillRect(Math.max(0, cam), cropTop + camY, Math.min(e.width, viewW + 2), roomH);
+    }
     if (e.bubble) SN.people.speech(ctx, SN.clamp(e.player.x, cam + 170, cam + viewW - 170), Math.max(e.player.y - e.z - 205, camY + cropTop + 150), e.bubble, SN.colors.gold, false);
     ctx.restore();
   }
@@ -310,22 +366,31 @@ SN.LevelRunner = class {
     this.v(name).innerHTML = text;
   }
 
+  /// Sets a style on a HUD element only when it changes (most frames nothing does, and every
+  /// write makes the browser check the page again).
+  put(el, prop, value) {
+    const was = el._shown || (el._shown = {});
+    if (was[prop] === value) return;
+    was[prop] = value;
+    el.style[prop] = value;
+  }
+
   updateHud() {
     const e = this.engine, L = this.level;
     this.setText('title', SN.esc(L.title()));
     const whole = Math.ceil(e.timeLeft);
     const timer = this.v('timer');
-    timer.style.display = e.showsClock ? '' : 'none';
+    this.put(timer, 'display', e.showsClock ? '' : 'none');
     this.setText('timer', `⏱ ${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`);
-    timer.classList.toggle('low', whole <= 10);
+    if ((timer._low ?? null) !== whole <= 10) { timer._low = whole <= 10; timer.classList.toggle('low', timer._low); }
     const hp = this.v('hp');
-    hp.style.display = e.usesHP ? '' : 'none';
+    this.put(hp, 'display', e.usesHP ? '' : 'none');
     if (e.usesHP) this.setText('hp', `❤️ ${Math.ceil(e.hp)}`);
     const noise = this.v('noise');
-    noise.style.opacity = e.noise > 1 ? 1 : 0;
-    const bar = noise.querySelector('i');
-    bar.style.width = e.noise + '%';
-    bar.style.background = e.noise > 70 ? '#ff3b30' : e.noise > 40 ? '#ff9500' : '#34c759';
+    this.put(noise, 'opacity', e.noise > 1 ? '1' : '0');
+    const bar = this.bar || (this.bar = noise.querySelector('i'));
+    this.put(bar, 'width', Math.round(e.noise) + '%');
+    this.put(bar, 'background', e.noise > 70 ? '#ff3b30' : e.noise > 40 ? '#ff9500' : '#34c759');
     // Backpack
     const inv = L.inventory || [];
     const packKey = inv.map(i => i.id).join(',');
@@ -342,7 +407,7 @@ SN.LevelRunner = class {
     }
     const corner = L.cornerHint ? L.cornerHint() : null;
     const ch = this.v('corner');
-    ch.style.display = corner ? '' : 'none';
+    this.put(ch, 'display', corner ? '' : 'none');
     if (corner) this.setText('corner', SN.esc(corner));
     // Banner
     const banner = L.banner || '';
@@ -364,14 +429,14 @@ SN.LevelRunner = class {
     // Buttons: E lights up when there's something to do; run and dash only once learned.
     const prompt = e.currentPrompt;
     const p = this.v('prompt');
-    p.style.display = prompt ? '' : 'none';
+    this.put(p, 'display', prompt ? '' : 'none');
     if (prompt) this.setText('prompt', `${SN.keys.use[1]} · ${SN.esc(prompt)}`);
-    const use = this.hud.querySelector('[data-b="use"]');
-    use.style.background = prompt || L.popup ? SN.colors.button : '#8e8e93';
-    this.hud.querySelector('[data-b="run"]').style.display = e.canRun ? '' : 'none';
-    this.hud.querySelector('[data-b="run"]').style.background = e.runHeld ? '#34c759' : '#59595e';
-    this.hud.querySelector('[data-b="dash"]').style.display = e.canDash ? '' : 'none';
-    this.hud.querySelector('[data-b="crouch"]').style.background = e.ducking ? '#af52de' : '#59595e';
+    const b = this.buttons || (this.buttons = Object.fromEntries(['use', 'run', 'dash', 'crouch'].map(n => [n, this.hud.querySelector(`[data-b="${n}"]`)])));
+    this.put(b.use, 'background', prompt || L.popup ? SN.colors.button : '#8e8e93');
+    this.put(b.run, 'display', e.canRun ? '' : 'none');
+    this.put(b.run, 'background', e.runHeld ? '#34c759' : '#59595e');
+    this.put(b.dash, 'display', e.canDash ? '' : 'none');
+    this.put(b.crouch, 'background', e.ducking ? '#af52de' : '#59595e');
     const belt = L.belt;
     const owned = belt ? belt.owned.join(',') : '';
     if (this.shown.items !== owned) {

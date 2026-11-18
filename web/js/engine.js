@@ -253,7 +253,9 @@ SN.Engine = class {
 
     this.walking = (len > 0.15 || this._dashTime > 0) && !this.hidden && !this.crouching;
     this.sprinting = run && this.walking;
-    if (Math.abs(v.x) > 0.1) this.facingRight = v.x > 0;
+    // Turn to face left or right only when really going sideways, not when the stick wobbles a
+    // little while you walk up or down.
+    if (Math.abs(v.x) >= 0.3 && Math.abs(v.x) >= Math.abs(v.y) * 0.4) this.facingRight = v.x > 0;
     if (this.walking && this.z === 0) {
       this._stepClock += dt;
       if (this._stepClock > (this.sprinting ? 0.2 : 0.32)) {

@@ -24,6 +24,11 @@ SN.GameState = class {
     this.orbs = data.orbs || 0;
     this.paidLevels = data.paidLevels || [];
     this.onToast = () => {};
+    // Levels won before their badge existed still count.
+    for (const id of this.completedLevels) {
+      const badge = 'level' + id;
+      if (!SN.soonBadges.includes(badge) && !this.has(badge)) this.badges.push(badge);
+    }
   }
 
   static key(slot) { return 'sn.save.' + slot; }
@@ -118,7 +123,7 @@ SN.GameState = class {
   complete(level) {
     if (!this.completedLevels.includes(level)) this.completedLevels.push(level);
     this.save();
-    if (level <= 4) this.award('level' + level);
+    this.award('level' + level);
   }
   learn(skill) {
     if (!this.skills.includes(skill)) this.skills.push(skill);

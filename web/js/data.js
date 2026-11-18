@@ -93,8 +93,9 @@ SN.badges = [
   ['unstoppable', 'Im unstoppable!', 'Own every boosting accessory and every permanent item.'],
   ['worldRevolving', 'the world revolving', 'Sprint with star ball power while wearing every speed-boosting accessory.'],
   ['kittens', 'Cat whisperer', "Find every missing kitten in Auntie's backyard."], ['dreamer', 'Sweet dreams', 'Wake up from a dream (Side Level 5).'],
+  ['level5', 'Level 5', 'Complete Level 5.'], ['level6', 'Level 6', 'Complete Level 6.'], ['level7', 'Level 7', 'Complete Level 7.'],
+  ['level8', 'Level 8', 'Complete Level 8.'], ['level9', 'Level 9', 'Complete Level 9.'], ['level10', 'Level 10', 'Complete Level 10.'],
 ];
-SN.soonBadges = ['aprilFool', 'jolly'];
 
 /// The ten levels. `ready` ones are built in this web version so far.
 SN.levels = [
@@ -111,3 +112,7 @@ SN.levels = [
 ];
 /// A level's clock on the difficulty being played.
 SN.levelTime = id => Math.round(SN.levels[id - 1].seconds * SN.difficulty.timeScale);
+
+/// Badges that can't be earned yet. They show up named "soon". A level's badge is "soon" until that
+/// level is built (Levels 8 to 10 for now).
+SN.soonBadges = ['aprilFool', 'jolly'].concat(SN.levels.filter(l => !l.ready).map(l => 'level' + l.id));

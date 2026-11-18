@@ -17,7 +17,7 @@ Every key is listed once in `js/keys.js`, which also supplies the letters on the
 
 ## What's built so far (stages 1–3)
 - Title, Customize Character (all hair styles, colours, tops, trousers, shoes, eyes, moods, caps,
-  accessories, boosts), Levels, Badges (all 42), Difficulty (all 5 modes), Settings, Save Files.
+  accessories, boosts), Levels, Badges (all 48, with Level 1 to Level 10), Difficulty (all 5 modes), Settings, Save Files.
 - Level 1 (Bedroom) and Level 2 (Hallway, your brother's room with the talk menu and drawing paper,
   Mom's room with Dad's checks, door keypad, window surprises, skill papers, loot).
 - Level 3 (Downstairs: the stairs' loose planks, the dog's key, metal scraps and the workbench,
@@ -33,6 +33,11 @@ Every key is listed once in `js/keys.js`, which also supplies the letters on the
   kittens, Auntie gives you the Water Hose boost (J), and Uncle's car drives you off).
 - Mom and Dad chasing you (with the "parents talk" and brother encounters), practice mode, pause menu,
   items (vines, toy, bat, lightning, cloud), sounds and music.
+
+Smooth on slower devices: the canvas is drawn at the screen's own sharpness (at most 2 pixels per point),
+and if frames come slower than about 50 a second it steps down a quarter at a time (`tune` in
+`js/scaffold.js`); filling pixels is what costs the most. A step that doesn't help (a browser holding
+frames back, as in Low Power Mode) is undone. The top bar's styles are only written when they change.
 
 Still to port: the side levels (Other Hallway, Dungeon, Uncle's Car, Cinema, Dreams),
 the Level Maker, multiplayer, Lore and creative mode.

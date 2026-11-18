@@ -23,7 +23,9 @@
     ctx.translate(-70, -250);
     D.rotated(ctx, 60, 164, swing * 20, () => D.capsule(ctx, 0, 41, 22, 82, SN.white(0.16)));
     D.rotated(ctx, 80, 164, -swing * 20, () => D.capsule(ctx, 0, 41, 22, 82, SN.white(0.20)));
-    arm(64, 94, -swing * 22);
+    // The far arm hangs behind the body; the near one in front, on the side they face (further
+    // in when it holds a flashlight or a mop).
+    arm(54, 94, -swing * 22);
     D.rrect(ctx, 70, 128, 74, 104, 22, coat);
     // Extras
     if (outfit === 'guardian') {
@@ -47,7 +49,7 @@
       D.rrect(ctx, 74, 150, 46, 22, 8, 'rgba(0,0,0,.18)');
     }
     const frontArm = outfit === 'guardian' ? -62 : outfit === 'worker' ? -35 : swing * 22;
-    arm(78, 94, frontArm);
+    arm(outfit === 'guardian' || outfit === 'worker' ? 78 : 92, 94, frontArm);
     D.circle(ctx, 72, 52, 60, skin);
     // Hats
     if (outfit === 'stranger') {
@@ -57,17 +59,13 @@
     } else if (outfit === 'worker') {
       if (style % 2 === 0) D.rrect(ctx, 72, 22, 44, 20, 4, coat); else D.dome(ctx, 72, 46, 62, 56, SN.rgb(0.3, 0.55, 0.75));
     } else D.dome(ctx, 72, 48, 62, 58, SN.white(0.55));
-    // Face
-    const blink = (t + 1.7) % 3.4 < 0.15;
-    D.capsule(ctx, 78, 52, 7, blink ? 1.5 : 7, '#111'); D.capsule(ctx, 92, 52, 7, blink ? 1.5 : 7, '#111');
-    if (outfit === 'stranger') {
-      D.rotated(ctx, 77, 44, 18, () => D.capsule(ctx, 0, 0, 12, 3, 'rgba(0,0,0,.75)'));
-      D.rotated(ctx, 93, 44, -18, () => D.capsule(ctx, 0, 0, 12, 3, 'rgba(0,0,0,.75)'));
-      D.capsule(ctx, 86, 67, 14, 3, 'rgba(0,0,0,.6)');
-    } else if (outfit === 'uncle') {
+    // Face: strangers look cross, guards sneaky, workers calm and Uncle happy.
+    const mood = o.mood ?? { stranger: 7, guardian: 5, worker: 0, uncle: 1 }[outfit];
+    SN.people.grownUpFace(ctx, 85, 52, { mood, gap: 14, size: 7, phase: 1.7, t, brows: 'rgba(0,0,0,.75)' });
+    if (outfit === 'uncle') {
       D.capsule(ctx, 86, 65, 26, 8, SN.white(0.45));
       D.circle(ctx, 76, 34, 13, null, SN.white(0.2), 2); D.circle(ctx, 92, 34, 13, null, SN.white(0.2), 2);
-    } else D.capsule(ctx, 86, 67, 12, 3, 'rgba(0,0,0,.6)');
+    }
     ctx.restore();
   }
 

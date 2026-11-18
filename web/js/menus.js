@@ -148,6 +148,7 @@ SN.menus = (function () {
     const grid = el.querySelector('.badges');
     SN.badges.forEach(([id, name, how]) => {
       const got = game.has(id);
+      if (SN.soonBadges.includes(id)) { name = 'soon'; how = 'Coming in a later update.'; }
       grid.appendChild(SN.el(`<div class="badge ${got ? 'got' : ''}"><b>${got ? '🏅' : '🔒'} ${SN.esc(name)}</b><small>${SN.esc(how)}</small></div>`));
     });
     return wire(el, go);

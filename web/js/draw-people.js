@@ -74,9 +74,16 @@
     const mood = taunting ? 1 : (opts.mood ?? look.face ?? 0);
     const idle = walking || taunting || crouching ? 0 : breath;
     const scared = mood === 3 && !taunting && !crouching;
-    const backArm = taunting ? 160 + wiggle * 20 : crouching ? -48 + swing * 16 : scared ? -140 + idle * 6 : -swing * 30 + 4 + idle * 4;
-    const frontArm = taunting ? -160 - wiggle * 20 : crouching ? -72 - swing * 16 : scared ? -150 - idle * 6 : swing * 30 - 4 - idle * 4;
-    const drop = crouching ? 24 + breath * 1.2 - Math.abs(swing) * 2 : 0;
+    // Taunting: both hands up beside the head, waving. Crouching: hands out in front, creeping
+    // forward one after the other. Scared: arms stiff and a little forward, trembling.
+    const tremble = scared ? Math.sin(t * 38) * 3 : 0;
+    const backArm = taunting ? 140 + wiggle * 18 : crouching ? -24 + swing * 12 : scared ? -14 + tremble : -swing * 30 + 5 + idle * 4;
+    const frontArm = taunting ? -140 - wiggle * 18 : crouching ? -42 - swing * 12 : scared ? -26 - tremble : swing * 30 - 6 - idle * 4;
+    // Crouching is a squat: knees out in front, the upper body lowered and leaning over them.
+    // The shoes stay on the floor line, the same as standing, so the feet never sink.
+    const drop = crouching ? 22 + breath * 1.2 - Math.abs(swing) * 2 : 0;
+    // Creeping: one knee and then the other moves forward, its foot lifting a little.
+    const step = swing * 6;
 
     ctx.save();
     ctx.translate(x, y);
@@ -87,8 +94,8 @@
 
     // Legs
     if (crouching) {
-      bentLeg(ctx, 17, 111 - Math.max(0, swing) * 3, -swing * 6, c);
-      bentLeg(ctx, 31, 111 - Math.max(0, -swing) * 3, swing * 6, c);
+      crouchLeg(ctx, 44, 126, 70 - step, 122, 62 - step, 142 - Math.max(0, -step) * 0.6, true, c);
+      crouchLeg(ctx, 52, 126, 80 + step, 121, 72 + step, 142 - Math.max(0, step) * 0.6, false, c);
     } else {
       leg(ctx, 42, 102.5, swing * 28, c);
       leg(ctx, 58, 102.5, -swing * 28, c);
@@ -118,15 +125,29 @@
       D.capsule(ctx, 4, 41.5, 24, 11, c.shoe);
     });
   }
-  function bentLeg(ctx, ox, oy, shuffle, c) {
-    D.capsule(ctx, ox + 20, oy + 9, 34, 17, c.trousers);
-    D.capsule(ctx, ox + 30 + shuffle, oy + 22, 16, 24, SN.shade(c.trousers, -0.06));
-    D.capsule(ctx, ox + 34 + shuffle, oy + 34, 24, 11, c.shoe);
+  /// A bent leg for crouching: the hip under the body, the knee out in front, the shin going down
+  /// to the shoe, which stands on the floor line.
+  function crouchLeg(ctx, hx, hy, kx, ky, fx, fy, far, c) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = far ? SN.shade(c.trousers, -0.08) : c.trousers; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(kx, ky); ctx.stroke();
+    ctx.strokeStyle = SN.shade(c.trousers, far ? -0.1 : -0.03); ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
+    ctx.restore();
+    D.capsule(ctx, fx + 5, fy + 2.5, 24, 11, far ? SN.shade(c.shoe, -0.06) : c.shoe);
   }
-  function arm(ctx, deg, c) {
-    D.rotated(ctx, 50, 59, deg, () => {
-      D.capsule(ctx, 0, 18, 14, 36, c.shirt);
-      D.circle(ctx, 0, 39.5, 13, c.skin);
+
+  // The character is drawn turned a little toward the way they face (facing right; the whole figure
+  // is mirrored to face left). So the near arm hangs on the facing side of the body, in front of it,
+  // and the far arm on the other side, behind it.
+  const NEAR_SHOULDER = 64, FAR_SHOULDER = 36;
+  /// An arm hanging from the shoulder, turned `deg` degrees. The sleeve is a shade darker than the
+  /// shirt so the arm shows against it; the far arm is darker still.
+  function arm(ctx, x, deg, far, c) {
+    D.rotated(ctx, x, 59, deg, () => {
+      D.capsule(ctx, 0, 18, 14, 36, SN.shade(c.shirt, far ? -0.16 : -0.07));
+      D.circle(ctx, 0, 39.5, 13, far ? SN.shade(c.skin, -0.05) : c.skin);
     });
   }
 
@@ -135,9 +156,9 @@
     if (acc && acc.family === 'cape') D.rotated(ctx, 34, 63, 8 + swing * 6, () => D.rrect(ctx, 0, 33, 34, 66, 10, acc.color));
     if (look.shirtStyle === 1) D.ellipse(ctx, 34, 62, 50, 30, SN.shade(c.shirt, -0.1));
     hairBehind(ctx, look, c);
-    arm(ctx, backArm, c);
+    arm(ctx, FAR_SHOULDER, backArm, true, c);
     torso(ctx, look, c);
-    arm(ctx, frontArm, c);
+    arm(ctx, NEAR_SHOULDER, frontArm, false, c);
     // Head and ear
     D.circle(ctx, 50, 38, 54, c.skin);
     D.ellipse(ctx, 40, 42, 9, 13, SN.shade(c.skin, -0.05));
@@ -153,23 +174,25 @@
 
   function torso(ctx, look, c) {
     D.rrect(ctx, 50, 86, 46, 52, 14, c.shirt);
+    // The pocket, strings, jacket and picture sit in the middle of the chest, where the near arm
+    // doesn't cover them.
     if (look.shirtStyle === 1) {
-      D.rrect(ctx, 54, 102, 30, 12, 6, SN.shade(c.shirt, -0.08));
-      D.capsule(ctx, 58, 70, 2.5, 14, 'rgba(255,255,255,.85)'); D.capsule(ctx, 66, 70, 2.5, 12, 'rgba(255,255,255,.85)');
+      D.rrect(ctx, 46, 102, 28, 12, 6, SN.shade(c.shirt, -0.08));
+      D.capsule(ctx, 44, 70, 2.5, 14, 'rgba(255,255,255,.85)'); D.capsule(ctx, 52, 70, 2.5, 12, 'rgba(255,255,255,.85)');
     } else if (look.shirtStyle === 2) {
       for (let i = 0; i < 4; i++) D.rect(ctx, 50, 70 + i * 11, 44, 4, 'rgba(255,255,255,.35)');
     } else if (look.shirtStyle === 3) {
-      D.rect(ctx, 60, 86, 12, 50, 'rgba(255,255,255,.92)');
-      D.rect(ctx, 54, 86, 3, 50, SN.shade(c.shirt, -0.12)); D.rect(ctx, 67, 86, 3, 50, SN.shade(c.shirt, -0.12));
+      D.rect(ctx, 47, 86, 12, 50, 'rgba(255,255,255,.92)');
+      D.rect(ctx, 41, 86, 3, 50, SN.shade(c.shirt, -0.12)); D.rect(ctx, 54, 86, 3, 50, SN.shade(c.shirt, -0.12));
     }
     const pattern = L.patterns[look.pattern % L.patterns.length];
     if (pattern && look.shirtStyle !== 3) {
       const col = look.shirt === 5 ? '#fff' : SN.colors.gold;
-      if (pattern === 'star') D.star(ctx, 63, 75, 8, col);
-      if (pattern === 'heart') D.heart(ctx, 63, 76, 16, col);
-      if (pattern === 'bolt') D.bolt(ctx, 63, 75, 16, col);
-      if (pattern === 'moon') D.moon(ctx, 63, 75, 13, col, c.shirt);
-      if (pattern === 'paw') D.paw(ctx, 63, 76, 15, col);
+      if (pattern === 'star') D.star(ctx, 46, 77, 8, col);
+      if (pattern === 'heart') D.heart(ctx, 46, 78, 16, col);
+      if (pattern === 'bolt') D.bolt(ctx, 46, 77, 16, col);
+      if (pattern === 'moon') D.moon(ctx, 46, 77, 13, col, c.shirt);
+      if (pattern === 'paw') D.paw(ctx, 46, 78, 15, col);
     }
   }
 
@@ -179,32 +202,66 @@
       D.capsule(ctx, 56, 40, 9, 3, '#000'); D.capsule(ctx, 71, 40, 9, 3, '#000');
       D.capsule(ctx, 66, 54, 9, 12, SN.rgb(1, 0.4, 0.5));
     } else {
-      const tall = blink ? 1.6 : (mood === 4 || mood === 3) ? 9.5 : mood === 6 ? 3 : mood === 5 ? 4.5 : 7.5;
-      [56, 71].forEach(ex => {
-        D.capsule(ctx, ex + glance, 40, 6.5, tall, c.eye);
-        if (!blink && tall > 4) D.circle(ctx, ex + glance + 1, 40 - tall / 4, 2.2, '#fff');
-      });
-      const tilt = mood === 2 || mood === 3 ? -16 : mood === 7 ? 18 : mood === 5 ? 8 : 0;
-      const lift = mood === 4 ? -4 : mood === 3 ? -3 : 0;
-      const brow = SN.shade(c.hair, -0.1);
-      D.rotated(ctx, 56 + glance * 0.5, 32 + lift, tilt, () => D.capsule(ctx, 0, 0, 9, 2.5, brow));
-      D.rotated(ctx, 71 + glance * 0.5, 32 + lift, -tilt, () => D.capsule(ctx, 0, 0, 9, 2.5, brow));
+      // Soft, round eyes with a shine. A mood changes their shape a little, never into a stare.
+      eye(ctx, 56 + glance, 40, mood, blink, c.eye);
+      eye(ctx, 71 + glance, 40, mood, blink, c.eye);
+      // Eyebrows: thin, and only gently tilted.
+      const tilt = mood === 2 ? -10 : mood === 3 ? -12 : mood === 7 ? 12 : mood === 5 ? 6 : 0;
+      const lift = mood === 4 ? -2.5 : mood === 3 ? -2 : 0;
+      const brow = SN.shade(c.hair, -0.12);
+      D.rotated(ctx, 56 + glance * 0.5, 33 + lift, tilt, () => D.capsule(ctx, 0, 0, 8, 2, brow));
+      D.rotated(ctx, 71 + glance * 0.5, 33 + lift, -tilt, () => D.capsule(ctx, 0, 0, 8, 2, brow));
       mouth(ctx, mood);
+      // Scared: a little drop of sweat, not a scream.
+      if (mood === 3) sweatDrop(ctx, 80, 30);
     }
     if (look.blush !== false) D.circle(ctx, 76, 50, 9, mood === 1 ? 'rgba(255,45,85,.5)' : 'rgba(255,45,85,.32)');
     if (look.freckles) [[60, 47], [64, 49], [73, 47], [77, 45]].forEach(([fx, fy]) => D.circle(ctx, fx, fy, 2, 'rgba(140,80,40,.6)'));
   }
 
+  /// One eye. Happy eyes are little arcs (^ ^), sleepy ones are shut; the others are round with a shine.
+  function eye(ctx, x, y, mood, blink, col) {
+    if (blink) { D.capsule(ctx, x, y, 7, 1.8, col); return; }
+    if (mood === 1 || mood === 6) {
+      ctx.save(); ctx.strokeStyle = col; ctx.lineCap = 'round'; ctx.beginPath();
+      if (mood === 1) { ctx.lineWidth = 2.2; ctx.arc(x, y + 2, 4, 1.16 * Math.PI, 1.84 * Math.PI); }
+      else { ctx.lineWidth = 2; ctx.arc(x, y - 1, 3.5, 0.16 * Math.PI, 0.84 * Math.PI); }
+      ctx.stroke(); ctx.restore();
+      return;
+    }
+    const wide = mood === 3 || mood === 4;
+    const tall = wide ? 8 : mood === 5 ? 4.2 : 7.2;
+    D.capsule(ctx, x, y, wide ? 7.2 : 6.4, tall, col);
+    D.circle(ctx, x + 1.1, y - tall / 4, wide ? 2.8 : 2.3, '#fff');
+    if (wide) D.circle(ctx, x - 1.4, y + tall / 5, 1.3, 'rgba(255,255,255,.85)');
+  }
+
+  function sweatDrop(ctx, x, y) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4.5);
+    ctx.bezierCurveTo(x + 1.2, y - 2.4, x + 3, y - 0.6, x + 3, y + 1.4);
+    ctx.arc(x, y + 1.4, 3, 0, Math.PI);
+    ctx.bezierCurveTo(x - 3, y - 0.6, x - 1.2, y - 2.4, x, y - 4.5);
+    ctx.fillStyle = SN.rgb(0.55, 0.8, 1); ctx.fill();
+  }
+
+  const MOUTH_LINE = SN.rgb(0.30, 0.16, 0.14, 0.85), MOUTH_SOFT = SN.rgb(0.75, 0.35, 0.38);
   function mouth(ctx, mood) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (mood === 1) { ctx.arc(64, 46, 8, 0.1 * Math.PI, 0.9 * Math.PI); ctx.stroke(); }
-    else if (mood === 3 || mood === 4) { ctx.restore(); D.ellipse(ctx, 64, 51, 7, mood === 4 ? 9 : 6, 'rgba(60,20,30,.85)'); return; }
-    else if (mood === 2 || mood === 7) { ctx.arc(64, 56, 7, 1.15 * Math.PI, 1.85 * Math.PI); ctx.stroke(); }
-    else if (mood === 5) { ctx.moveTo(58, 51); ctx.quadraticCurveTo(66, 53, 71, 47); ctx.stroke(); }
-    else if (mood === 6) { ctx.moveTo(60, 51); ctx.lineTo(68, 51); ctx.stroke(); }
-    else { ctx.arc(64, 47, 7, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke(); }
+    ctx.strokeStyle = MOUTH_LINE; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // A piece of a circle's outline, from `a` to `b` turns clockwise from the right (like SwiftUI's trim).
+    const arc = (cx, cy, d, a, b, lw) => { ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(cx, cy, d / 2, a * 2 * Math.PI, b * 2 * Math.PI); ctx.stroke(); };
+    switch (mood) {
+      case 1: arc(64, 46, 15, 0.05, 0.45, 2.5); break;
+      case 2: arc(64, 55, 13, 0.64, 0.86, 2.3); break;
+      case 3: // a small wobbly mouth
+        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(58, 52); ctx.lineTo(61, 50); ctx.lineTo(64, 52); ctx.lineTo(67, 50); ctx.lineTo(70, 52); ctx.stroke(); break;
+      case 4: D.ellipse(ctx, 64, 51, 5, 6, MOUTH_SOFT); break;
+      case 5: D.rotated(ctx, 66, 50, -10, () => D.capsule(ctx, 0, 0, 9, 2.2, MOUTH_LINE)); break;
+      case 6: ctx.globalAlpha = 0.8; D.ellipse(ctx, 64, 51, 4, 4, MOUTH_SOFT); break;
+      case 7: arc(64, 55, 12, 0.66, 0.84, 2.3); break;
+      default: arc(64, 46.5, 13, 0.1, 0.4, 2.3);
+    }
     ctx.restore();
   }
 
@@ -336,6 +393,39 @@
     ctx.restore();
   }
 
+  /// A grown-up's face, with the same moods as yours (0 calm, 1 happy, 2 worried, 3 scared, 4 surprised,
+  /// 5 sneaky, 6 sleepy, 7 cross): soft eyes with a shine and gentle eyebrows, never a stare.
+  /// (cx, cy) is between the eyes. Like GrownUpFace on the iPad.
+  function grownUpFace(ctx, cx, cy, o) {
+    const mood = o.mood ?? 0, gap = o.gap ?? 22, size = o.size ?? 7, t = o.t ?? SN.now();
+    const blink = (t + (o.phase ?? 0)) % 3.6 < 0.16;
+    const wide = mood === 3 || mood === 4;
+    const tall = blink ? Math.max(1.5, size * 0.22) : wide ? size * 1.12 : mood === 6 ? size * 0.35 : mood === 5 ? size * 0.55 : size;
+    const tilt = mood === 2 ? -10 : mood === 3 ? -12 : mood === 7 ? 13 : mood === 5 ? 6 : 0;
+    const lift = mood === 4 ? -3 : mood === 3 ? -2 : 0;
+    for (const side of [-1, 1]) {
+      const ex = cx + side * gap / 2;
+      D.capsule(ctx, ex, cy, size, tall, SN.white(0.08));
+      if (!blink && tall > size * 0.5) D.circle(ctx, ex + size * 0.15, cy - tall / 4, Math.max(2, size * 0.32), '#fff');
+      D.rotated(ctx, ex, cy - size - 4 + lift - (o.browRise ?? 0), -side * tilt, () => D.capsule(ctx, 0, 0, size * 1.8, 2.5, o.brows || '#000'));
+    }
+    if (o.mouth === false) return;
+    const my = cy + size + 9 + (o.mouthDrop ?? 0), w = gap * 0.8;
+    const arc = (y, d, a, b, alpha) => {
+      ctx.save(); ctx.strokeStyle = `rgba(0,0,0,${alpha})`; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, y, d / 2, a * 2 * Math.PI, b * 2 * Math.PI); ctx.stroke(); ctx.restore();
+    };
+    switch (mood) {
+      case 1: arc(my - w / 2 + 2, w, 0.05, 0.45, 0.75); break;
+      case 2: arc(my + w / 2 + 2, w, 0.6, 0.9, 0.7); break;
+      case 3: case 4: D.ellipse(ctx, cx, my, w * 0.32, w * 0.36, SN.rgb(0.62, 0.28, 0.30)); break; // a small round "oh"
+      case 5: D.rotated(ctx, cx + 3, my, -10, () => D.capsule(ctx, 0, 0, w * 0.65, 3, 'rgba(0,0,0,.7)')); break;
+      case 6: D.ellipse(ctx, cx, my, 6, 6, SN.rgb(0.35, 0.10, 0.12, 0.8)); break;
+      case 7: arc(my + w / 2 + 2, w, 0.62, 0.88, 0.75); break;
+      default: arc(my - w * 0.42 + 2, w * 0.85, 0.1, 0.4, 0.7);
+    }
+  }
+
   function grownUpArm(ctx, px, py, deg, sleeve, skin) {
     D.rotated(ctx, px, py, deg, () => { D.capsule(ctx, 0, 31, 18, 62, sleeve); D.circle(ctx, 0, 67, 18, skin); });
   }
@@ -356,11 +446,8 @@
       if (o.bun) D.circle(ctx, 62, 30, 36, SN.white(0.78));
       D.dome(ctx, 70, 64, 68, 68, o.hair || SN.rgb(0.45, 0.28, 0.15));
       if (!o.noCurlers) [46, 62, 78, 94].forEach(cx => D.capsule(ctx, cx, 30, 12, 18, '#32ade6'));
-      D.rotated(ctx, 58, 60, 15, () => D.capsule(ctx, 0, 0, 14, 3, '#000'));
-      D.rotated(ctx, 82, 60, -15, () => D.capsule(ctx, 0, 0, 14, 3, '#000'));
-      const blink = (t + 1.3) % 3.6 < 0.16;
-      D.capsule(ctx, 59, 68, 7, blink ? 1.5 : 7, '#111'); D.capsule(ctx, 81, 68, 7, blink ? 1.5 : 7, '#111');
-      D.capsule(ctx, 70, 84, 18, 4, 'rgba(0,0,0,.7)');
+      // Her face: cross when she's after you, surprised when stunned.
+      grownUpFace(ctx, 70, 68, { mood: o.stunned ? 4 : o.mood ?? (o.calm ? 0 : 7), gap: 22, size: 7, phase: 1.3, t });
       if (o.stunned) stunStars(ctx, 70, 18, t);
       else if (!o.calm) label(ctx, '?!', 120, 22, 30, '#ffcc00');
     });
@@ -391,8 +478,9 @@
       D.circle(ctx, 70, 58, 62, skin);
       D.dome(ctx, 70, 52, 64, 50, SN.rgb(0.3, 0.2, 0.12));
       D.circle(ctx, 60, 60, 16, null, '#222', 2.5); D.circle(ctx, 82, 60, 16, null, '#222', 2.5); D.rect(ctx, 71, 58, 6, 2, '#222');
-      const blink = (t + 2.1) % 3.6 < 0.16;
-      D.capsule(ctx, 60, 60, 6, blink ? 1.5 : 6, '#111'); D.capsule(ctx, 82, 60, 6, blink ? 1.5 : 6, '#111');
+      grownUpFace(ctx, 71, 60, { mood: o.laughing ? 1 : o.stunned ? 4 : o.mood ?? 0, gap: 22, size: 6, phase: 2.4, t,
+        brows: SN.rgb(0.25, 0.18, 0.12), mouthDrop: 11, browRise: 4 });
+      // His moustache sits over the top of his mouth.
       D.capsule(ctx, 71, 76, 28, 8, SN.rgb(0.3, 0.2, 0.12));
       if (o.laughing) label(ctx, 'Ha ha!', 120, 18, 22, '#ffcc00');
       else if (o.stunned) stunStars(ctx, 70, 12, t);
@@ -410,6 +498,6 @@
     ctx.restore();
   }
 
-  SN.people = { character, mom, dad, guide, speech, stunStars,
+  SN.people = { character, mom, dad, guide, speech, stunStars, grownUpFace,
     brotherLook: Object.assign(SN.look.starter('boy'), { skin: 1, shirt: 3, pattern: 4 }) };
 })();

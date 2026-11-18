@@ -2,6 +2,8 @@
 (function () {
   const ui = document.getElementById('ui');
   const canvas = document.getElementById('stage');
+  // Opaque (the sky and the rooms always cover it), so the browser never blends it with the page.
+  const stageCtx = canvas.getContext('2d', { alpha: false });
   let game = new SN.GameState(SN.GameState.currentSlot);
   let runner = null;
   let skyRunning = false;
@@ -22,9 +24,11 @@
   const stars = (() => { const r = SN.seeded(7); return Array.from({ length: 90 }, () => [r(), r() * 0.8, 1 + r() * 2.5, r() * 6]); })();
   function sky() {
     if (!skyRunning) return;
-    const dpr = window.devicePixelRatio || 1;
-    if (canvas.width !== Math.round(innerWidth * dpr)) { canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr); }
-    const ctx = canvas.getContext('2d');
+    const dpr = SN.LevelRunner.sharpest();
+    if (canvas.width !== Math.round(innerWidth * dpr) || canvas.height !== Math.round(innerHeight * dpr)) {
+      canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+    }
+    const ctx = stageCtx;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const W = innerWidth, H = innerHeight, t = SN.now();
     const g = ctx.createLinearGradient(0, 0, 0, H);
