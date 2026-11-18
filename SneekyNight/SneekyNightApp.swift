@@ -130,6 +130,14 @@ struct ContentView: View {
         .animation(.spring(duration: 0.4), value: game.badgeToast)
         .environment(game)
         .onAppear {
+            #if DEBUG
+            // Test builds on GitHub's Mac: draw the characters to pictures, or open a level straight away.
+            if DebugSnapshots.requested {
+                DebugSnapshots.run(game: game)
+                return
+            }
+            if let level = DebugSnapshots.openLevel { screen = .level(level) }
+            #endif
             game.awardLaunchBadges()
             game.note(saveFiles: GameState.slots.count)
             SoundPlayer.shared.startMusic()

@@ -1,0 +1,65 @@
+# Draws the characters in many poses in an iPad simulator on one of GitHub's Macs, plus a
+# screenshot of the title and of Level 1, and puts the pictures on the `ci-snapshots` branch.
+# For checking how things look without a device. Runs on pushes to snapshots/... branches,
+# or by hand from the Actions tab. Uses a few minutes of Mac time each run.
+name: Snapshots
+
+on:
+  push:
+    branches: ['snapshots/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshots:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode on the runner
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project SneekyNight.xcodeproj -target SneekyNight -sdk iphonesimulator \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build 2>&1 | tee build.log | grep -E "error:|BUILD" || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Errors
+        if: failure()
+        run: grep -E "error:" build.log | sort -u | head -150
+      - name: Run in an iPad simulator
+        run: |
+          set -x
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ipads = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if "iPad" in d["name"]]
+          print(ipads[-1]["udid"])')
+          xcrun simctl bootstatus "$UDID" -b
+          APP=build/Debug-iphonesimulator/SneekyNight.app
+          BID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p out
+          xcrun simctl launch "$UDID" "$BID" -snapshots
+          DATA=$(xcrun simctl get_app_container "$UDID" "$BID" data)
+          for i in $(seq 1 120); do [ -f "$DATA/Documents/snapshots/done.txt" ] && break; sleep 2; done
+          cp "$DATA"/Documents/snapshots/*.png out/ || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$BID"
+          sleep 10
+          xcrun simctl io "$UDID" screenshot out/screen-title.png
+          xcrun simctl launch --terminate-running-process "$UDID" "$BID" -openLevel 1
+          sleep 10
+          xcrun simctl io "$UDID" screenshot out/screen-level1.png
+          ls -la out
+      - name: Put the pictures on the ci-snapshots branch
+        run: |
+          cd out
+          git init -q
+          git checkout -q -b ci-snapshots
+          git add -A
+          git -c user.name="Snapshots" -c user.email="snapshots@users.noreply.github.com" commit -qm "Snapshots of ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ci-snapshots

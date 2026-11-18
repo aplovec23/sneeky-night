@@ -9,15 +9,18 @@ struct CharacterView: View {
     var taunting = false
     /// The face to make. Nil: the resting face picked in Customize Character.
     var expression: Mood?
+    /// Draws one moment of the animation instead of playing it (for pictures of the poses).
+    var frozenTime: Double?
 
     init(look: Look, facingRight: Bool = true, walking: Bool = false, crouching: Bool = false, taunting: Bool = false,
-         expression: Mood? = nil) {
+         expression: Mood? = nil, frozenTime: Double? = nil) {
         self.look = look
         self.facingRight = facingRight
         self.walking = walking
         self.crouching = crouching
         self.taunting = taunting
         self.expression = expression
+        self.frozenTime = frozenTime
     }
 
     private var mood: Mood { expression ?? Mood(rawValue: look.face) ?? .calm }
@@ -27,16 +30,26 @@ struct CharacterView: View {
     }
 
     var body: some View {
-        // Always a little alive: standing still you breathe, sway and look about; moving runs at full speed.
-        TimelineView(.animation(minimumInterval: walking || taunting ? nil : 1 / 30)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            // Creeping is slower than walking, and a crouched character keeps breathing and looking around.
-            figure(swing: walking ? sin(t * (crouching ? 8 : 13)) : 0, wiggle: taunting ? sin(t * 22) : 0,
-                   breath: sin(t * (crouching ? 2.4 : 1.8) + Double(look.skin)), time: t)
+        Group {
+            if let frozenTime {
+                pose(at: frozenTime)
+            } else {
+                // Always a little alive: standing still you breathe, sway and look about; moving runs at full speed.
+                TimelineView(.animation(minimumInterval: walking || taunting ? nil : 1 / 30)) { ctx in
+                    pose(at: ctx.date.timeIntervalSinceReferenceDate)
+                }
+            }
         }
         .frame(width: 100, height: 160)
         .scaleEffect(x: facingRight ? 1 : -1, y: 1)
         .animation(.easeInOut(duration: 0.15), value: crouching)
+    }
+
+    /// The whole figure at one moment `t` (seconds).
+    private func pose(at t: Double) -> some View {
+        // Creeping is slower than walking, and a crouched character keeps breathing and looking around.
+        figure(swing: walking ? sin(t * (crouching ? 8 : 13)) : 0, wiggle: taunting ? sin(t * 22) : 0,
+               breath: sin(t * (crouching ? 2.4 : 1.8) + Double(look.skin)), time: t)
     }
 
     private var skin: Color { LookOptions.skins[look.skin % LookOptions.skins.count] }
