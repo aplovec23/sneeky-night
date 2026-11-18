@@ -979,6 +979,7 @@ struct UpdateLogView: View {
             "New badges: Level 5, 6, 7, 8, 9 and 10, one for winning each level. Levels you already won count straight away. Levels 8 to 10 say \"soon\" until they're out.",
             "Smoother play: the clock, noise meter and buttons only redraw when they change, so moving around takes much less work every frame.",
             "Friendlier faces: softer, rounder eyes with a shine, gentler eyebrows, and a scared face gets a little drop of sweat instead of a scream. Mom, Dad, Auntie, Uncle, the strangers and the Ghost got friendlier faces too.",
+            "Fixed Ion's scary eyes: they're big and warm with a shine now, instead of a small pupil staring out of a lot of white. They still follow you around the shop.",
             "Fixed your arms: they hang on the side you're facing, so your hand goes where you go instead of sitting on your tummy. You also only turn left or right when you're really going sideways.",
             "Every dream has a name made of random words, like \"Floating Moon\" or \"Crooked Melting Kitchen\" (a 50/50 chance of an extra word), and its wallpaper, sky, moons and floor are made up by a randomizer.",
             "Fixed the weird crouch: it's a real squat now, knees in front and both feet flat on the floor.",
