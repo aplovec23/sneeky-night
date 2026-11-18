@@ -167,6 +167,13 @@ enum DebugSnapshots {
                 cell("Guide", width: 170, height: 300) { GuideView() }
                 cell("brother", width: 170, height: 300) { CharacterView(look: SiblingBuddy.look, frozenTime: 0) }
             }
+            row("Ion (the Shop)") {
+                cell("Ion", width: 170, height: 300) { IonView() }
+                cell("talking", width: 170, height: 300) { IonView(talking: true) }
+                cell("looks left", width: 170, height: 300) { IonView(gaze: CGVector(dx: -1, dy: 0)) }
+                cell("looks up right", width: 170, height: 300) { IonView(gaze: CGVector(dx: 0.8, dy: -0.6)) }
+                cell("looks down", width: 170, height: 300) { IonView(gaze: CGVector(dx: 0, dy: 1)) }
+            }
         }
     }
 

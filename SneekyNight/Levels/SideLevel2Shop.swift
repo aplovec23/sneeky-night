@@ -291,25 +291,40 @@ struct IonView: View {
                     .offset(x: CGFloat(i - 2) * 14, y: -94 + abs(CGFloat(i - 2)) * 4)
             }
             Capsule().fill(hair).frame(width: 36, height: 12).rotationEffect(.degrees(-14)).offset(x: 10, y: -64)
-            // Big eyes that follow you
+            // Big friendly eyes that follow you: a large warm iris with two shines (never a small
+            // pupil staring out of a lot of white), and no dark outline.
             ForEach([-1.0, 1.0], id: \.self) { side in
-                ZStack {
-                    Ellipse().fill(.white).frame(width: 22, height: blink ? 3 : 25)
-                    if !blink {
-                        Circle().fill(Color(red: 0.35, green: 0.20, blue: 0.10)).frame(width: 12)
-                            .overlay(Circle().fill(.black).frame(width: 6))
-                            .overlay(Circle().fill(.white).frame(width: 3).offset(x: 2, y: -2))
-                            .offset(x: gaze.dx * 5, y: gaze.dy * 6)
+                Group {
+                    if blink {
+                        Capsule().fill(Color(red: 0.25, green: 0.15, blue: 0.10)).frame(width: 16, height: 2.5)
+                    } else {
+                        ZStack {
+                            Ellipse().fill(Color(white: 0.98))
+                            ZStack {
+                                Circle().fill(Color(red: 0.42, green: 0.25, blue: 0.13))
+                                Circle().fill(Color(red: 0.12, green: 0.07, blue: 0.05)).frame(width: 8)
+                                Circle().fill(.white).frame(width: 5.5).offset(x: 2.6, y: -3)
+                                Circle().fill(.white.opacity(0.85)).frame(width: 2.5).offset(x: -2.8, y: 3)
+                            }
+                            .frame(width: 15, height: 15)
+                            .offset(x: gaze.dx * 3.5, y: gaze.dy * 3.5)
+                        }
+                        .frame(width: 19, height: 21)
+                        .clipShape(Ellipse())
+                        .overlay(Ellipse().stroke(Color(red: 0.55, green: 0.35, blue: 0.25).opacity(0.3), lineWidth: 1))
                     }
                 }
-                .overlay(Ellipse().stroke(.black.opacity(0.35), lineWidth: 1.5).frame(width: 22, height: blink ? 3 : 25))
                 .offset(x: side * 15, y: -40)
             }
-            // Eyebrows lift when he talks
+            // Eyebrows: gentle when he listens, lifted when he talks (never a frown).
             ForEach([-1.0, 1.0], id: \.self) { side in
-                Capsule().fill(hair).brightness(-0.1).frame(width: 16, height: 4)
-                    .rotationEffect(.degrees(side * (talking ? -8 : 4)))
-                    .offset(x: side * 15, y: talking ? -58 : -55)
+                Capsule().fill(hair).brightness(-0.1).frame(width: 15, height: 3.5)
+                    .rotationEffect(.degrees(side * (talking ? 0 : 4)))
+                    .offset(x: side * 15, y: talking ? -59 : -55)
+            }
+            // Rosy cheeks
+            ForEach([-1.0, 1.0], id: \.self) { side in
+                Ellipse().fill(Color.pink.opacity(0.28)).frame(width: 11, height: 7).offset(x: side * 24, y: -28)
             }
             // Freckles and a grin
             ForEach(0..<3, id: \.self) { i in
