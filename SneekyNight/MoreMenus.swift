@@ -42,7 +42,11 @@ struct SettingsView: View {
                             SongPicker()
                         }
                         group("Time of day") {
-                            picker("The game's sky", ["Night", "Early morning", "Real time"], $settings.skyMode)
+                            // Shown in time-of-day order; saved as 0 night, 1 morning, 2 real time, 3 afternoon, 4 sunset.
+                            let order = [0, 1, 3, 4, 2]
+                            picker("Sky", ["Night", "Morning", "Afternoon", "Sunset", "Real time"], Binding(
+                                get: { order.firstIndex(of: settings.skyMode) ?? 0 },
+                                set: { settings.skyMode = order[$0] }))
                             if settings.skyMode == 2 {
                                 TimeZonePicker()
                             }
@@ -234,15 +238,12 @@ struct SideLevelsView: View {
                         card(1, "The Other Hallway", "signpost.right.fill",
                              "The hallway behind your room. Find the 5 keys hidden in the boxes to open the other door. Boosts turn up a little more often here!",
                              game.sideLevelRequirements)
-                        card(2, "The Dungeon", "diamond.fill",
-                             "Mine glowing orbs and spend them on upgrades (speed goes up to ×5.7!), accessories and demo-only exclusives. It never ends, but the quest board has a quest.",
-                             game.dungeonRequirements)
+                        card(2, "The Shop", "cart.fill",
+                             "Ion's shop. Boosting items (Nokia, Phone, Sneaky Cape: 1000 moonlights each), two skills (1569 each), upgrades and accessories. Look at the cases and talk to Ion to finish it. Ion is watching.",
+                             [])
                         card(3, "Uncle's Car", "car.fill",
                              "Hop into Uncle's car behind the hotel and ride to the city where Auntie lives. She knows where Grandpa is. Still in the car after 10 minutes? You'll see a little of Level 6.",
                              game.carRequirements)
-                        card(4, "The Cinema", "popcorn.fill",
-                             "Pick a seat and watch a show. There are 10, each one hour long, and your place is kept if you leave. Every show you watch to the end pays 1000 orbs.",
-                             [])
                         card(5, "Dreams", "moon.zzz.fill",
                              "You fell asleep. Every dream is different: a random room, random keys, hazards and dream people. Find every key and get out of the door to wake up.",
                              game.dreamRequirements)
@@ -559,12 +560,16 @@ struct LoreView: View {
          "Show up while you carry snacks. Each one steals a snack and leaves a present: an accessory, and 1 time in 10 a boost."),
         ("The owl", "bird.fill", .teal,
          "Lives by the chimney on the roof. It winks at you. Nobody knows why."),
+        ("Grandma", "house.lodge.fill", .purple,
+         "Lives at the end of Uncle's road in a blue house with a garden full of Grandpa's lanterns. Takes five seconds to find her slippers, asks a lot of questions, and gives chores like Auntie does. She knows where Grandpa lives."),
         ("Auntie", "house.fill", .teal,
          "Mom's big sister, in a teal dressing gown with her grey hair in a bun. She knows where Grandpa is, but first: ten chores. She thanks you for her kittens with the hose she's had for thirty years."),
         ("Auntie's cats", "cat.fill", .orange,
          "Ginger and fond of sleeping right where you need to walk. Step on one and Auntie takes time off your clock. On Hard they wake up and wander."),
-        ("The Orb Shop keeper", "cart.fill", .purple,
-         "Runs the striped stall at the dungeon entrance. Takes orbs for upgrades, accessories and demo exclusives, and never says where the orbs go."),
+        ("Ion", "cart.fill", .teal,
+         "Runs the Shop (Side Level 2, or the Shop button on the menu). Sells the Nokia, the Phone, the Sneaky Cape, two skills, upgrades and accessories for moonlights. His eyes follow you everywhere, and in the shop window they follow your finger too."),
+        ("The robbers", "figure.baseball", .gray,
+         "A gang in stripy jumpers and eye masks who ambush Uncle's car in Level 9. They talk the whole time, pull bits off the car, and run away after three bonks of the bat."),
         ("The Friend", "figure.2.arms.open", .green,
          "Only lives in the Level Maker. Sneaking out too, apparently, and always up for a race to the exit."),
         ("The Ghost", "theatermasks.fill", .white,
@@ -601,8 +606,12 @@ struct LoreView: View {
          "Every 4th box search has one until you know Dash (Q) and Run (Shift)."),
         ("Star balls", "star.circle.fill", .yellow,
          "On the roof. +6% speed each for the rest of Level 3, up to +60%."),
-        ("Orbs", "circle.hexagongrid.fill", .cyan,
-         "Mined from glowing rocks in the dungeon and spent at the Orb Shop."),
+        ("Moonlights", "moon.stars.fill", Color(red: 0.75, green: 0.85, blue: 1),
+         "The game's money (they used to be called orbs). Win a level or a side level, again or for the first time, and you get some: more for later levels and harder modes. Spend them in Ion's Shop."),
+        ("Car parts", "wrench.and.screwdriver.fill", .orange,
+         "The tyre, battery, spark plug, headlight and fan belt the robbers pulled off Uncle's car in Level 9. Pick them up and fit them back at the car."),
+        ("Upgrade Items", "wrench.and.screwdriver.fill", Palette.gold,
+         "Uncle's thank-you for Level 9: a skill that lets you upgrade boosting items (stronger boosts) and defensive items (longer stuns, shorter waits) in the Shop, up to level 3."),
         ("The golden stick (K)", "wand.and.stars", Palette.gold,
          "Very, very rare. It's on the roof... sometimes. Or behind the vault in The Room, for those with the Guide's Hat and the right 10-letter code. Kept for good, press K once per try: every obstacle in the room is gone, and so are Mom, Dad, strangers, guards, workers, rats, pests, the gate dogs, spikes, lasers and lava, for the rest of the try."),
         ("Drawing paper", "pencil.and.scribble", .white,
@@ -653,6 +662,10 @@ struct LoreView: View {
             : ("???", "questionmark", GuidesHat.color, "A boost that can't be found, bought or won. The chance is exactly zero. Only the Guide knows who gets one."))
         list.append((Boost.waterHose.name + (game.boosts.contains(.waterHose) ? "  ✓" : ""), Boost.waterHose.symbol, Boost.waterHose.color,
                      "Boost, only in Level 7: Auntie gives it to you. \(Boost.waterHose.about)"))
+        for boost in Boost.shopOnly {
+            list.append((boost.name + (game.boosts.contains(boost) ? "  ✓" : ""), boost.symbol, boost.color == Color(white: 0.85) ? .white : boost.color,
+                         "Boost from Ion's Shop (\(GameState.shopItemPrice) moonlights). \(boost.about)"))
+        }
         var families: [Accessory.Family] = []
         for item in Accessory.all where !families.contains(item.family) { families.append(item.family) }
         for family in families {
@@ -661,13 +674,14 @@ struct LoreView: View {
             let names: [Accessory.Family: String] = [
                 .glasses: "Glasses", .crown: "Crown", .bowTie: "Bow Ties", .scarf: "Scarves", .cape: "Capes", .headband: "Headbands",
                 .catEars: "Cat Ears", .headphones: "Headphones", .halo: "Halo", .partyHat: "Party Hats", .beanie: "Beanies",
-                .topHat: "Top Hats", .hairBow: "Hair Bows", .flower: "Flowers",
+                .topHat: "Top Hats", .hairBow: "Hair Bows", .flower: "Flowers", .bunnyEars: "Bunny Ears", .wizardHat: "Wizard Hats",
+                .bandana: "Bandanas", .monocle: "Monocles", .starClip: "Star Clips", .cowboyHat: "Cowboy Hats",
             ]
             list.append((names[family] ?? family.rawValue, kinds[0].symbol, kinds[0].color == .black ? .white : kinds[0].color,
                          "Accessory. \(kinds.count) colour\(kinds.count == 1 ? "" : "s") to find in boxes and from rats. You have \(owned)."))
         }
         list.append(("Demo exclusives", "sparkles", .cyan,
-                     "Six accessories sold only in the dungeon's Orb Shop, 40 orbs each: \(Accessory.exclusives.map(\.name).joined(separator: ", "))."))
+                     "Six accessories sold only in Ion's Shop, \(ShopPanel.exclusivePrice) moonlights each: \(Accessory.exclusives.map(\.name).joined(separator: ", "))."))
         return list
     }
 
@@ -734,15 +748,45 @@ struct LoreView: View {
          "Dad is a night owl. He sits up with a cup of cocoa that's always gone cold, and he checks the rooms and the garden because he once left the gate open and the dogs ate every one of his tomatoes. He laughs when you taunt him because he was exactly the same at your age. He just can't say that in front of Mom."),
         ("Your brother", "teddybear.fill",
          "Your little brother can sleep through thunder, but not through silliness. He leaves his toys all over the floor (sorry about the squeaky ones), and the toy he lends you is his favourite thing in the whole world. He wants to come to the festival too. Maybe next year."),
-        ("The dog and Uncle", "pawprint.fill",
-         "The dog next door isn't a guard dog, he's a snack dog. The blue key on his collar fits a door in your uncle's hotel downtown. Uncle runs the night shift, drives an old car that somehow still works, and has owed you a favour ever since you found his lost glasses. On his head."),
+        ("Grandpa", "figure.walk.motion",
+         "Grandpa taught you to whistle, to fold paper lanterns and to walk on the creaky stairs without a sound (on the edges, never the middle). Every year he took you to the Lantern Festival on his shoulders. This year his knees won't make the trip, and nobody wanted to say so. He's waiting somewhere, and he'd love a lantern."),
+        ("Grandma", "house.lodge.fill",
+         "Grandma lives far out, past the end of Uncle's road, in a house with a garden full of lanterns. She takes five whole seconds to open the door because she has to find her slippers first. She asks a lot of questions. Then she gives you chores, because that's how this family says \"I love you\"."),
+        ("The snack dog", "pawprint.fill",
+         "The dog next door isn't a guard dog, he's a snack dog. The blue key on his collar fits a door in your uncle's hotel downtown. He'll trade it for two snacks, and by Level 5 he's brought fourteen friends who all want one. Out at Grandma's there's another one, too full to want anything at all."),
+        ("Uncle", "car.fill",
+         "Uncle runs the night shift at the hotel downtown, drives an old car that somehow still works, and has owed you a favour ever since you found his lost glasses. On his head. His room is never on the same floor twice, and he doesn't always check his back seat."),
+        ("Auntie", "house.fill",
+         "Mom's big sister. She wears a teal dressing gown, keeps her grey hair in a bun, and can never find her glasses. She knows exactly where Grandpa is, but she's a firm believer in chores first. When you find her kittens she gives you her thirty-year-old garden hose, which is the highest honour she knows."),
+        ("Auntie's cats and kittens", "cat.fill",
+         "The big ginger cats sleep wherever you most need to walk, and they have very loud opinions about tails. Their kittens escape at the first splash of the hose and hide in bushes, sheds and an old doghouse that says REX on it. Nobody remembers who Rex was."),
+        ("The gate dogs", "dog.fill",
+         "Two dogs guard Dad's garden gate, mostly by lying in front of it. They wander off every ten seconds or so to sniff something, then wander back. They grumble if you get too close, which is how Dad knows to come and check."),
+        ("Strangers", "figure.walk",
+         "People out on the street in the middle of the night, hoods up and hands in their pockets. They aren't looking for you. They just don't look where they're going, and bumping into one hurts. They're back out at Grandma's, too."),
+        ("Hotel guards and workers", "flashlight.on.fill",
+         "The guards sweep their flashlights in front of the hotel, and the workers push trolleys of towels through the lobby and the corridors. They only see what's in front of them, and much less if you crouch. They'll send you back to the start, politely."),
+        ("Rats", "hare.fill",
+         "The street rats can smell a snack from a whole block away. They always pay for it, though: a shiny button, an accessory, and once in a while something really rare."),
+        ("The owl", "bird.fill",
+         "Lives by the chimney on your roof. It winks at you. Some say it drops the golden stick now and then, on nights when nobody's looking. The owl isn't saying."),
+        ("Ion", "cart.fill",
+         "Ion used to keep the striped stall at the mouth of the old dungeon, until the dungeon caved in one night (nobody was hurt; the rocks were mostly sulking). Now he has a proper shop, fairy lights and all, and takes moonlights instead of orbs. He's a teenager, he says, \"in shopkeeper years\". His eyes follow you wherever you go. He says it's good customer service."),
+        ("The robbers", "figure.baseball",
+         "Nobody knows their real names. One of them is definitely called Gary. They wait on dark country roads for old cars, pull off the shiny bits, and talk far too much while doing it. They are not brave. Three bonks with a bat and they run for it, and they always drop what they took."),
+        ("The Friend and the Ghost", "theatermasks.fill",
+         "Two characters who only live in the Level Maker. The Friend is sneaking out too and always wants to race you to the exit. The Ghost says \"Boooo\", immediately apologises, and points you to the keys."),
+        ("Dream people", "moon.zzz.fill",
+         "Faces from your dreams. They say strange things (the clocks are melting, the keys are shy), and they're never in the same place twice. The more dreams you win in a row, the faster your dreams get."),
+        ("Player 2", "person.2.fill",
+         "Your partner in sneaking, with their own look and name. Two kids are twice as likely to giggle at the wrong moment, but also twice as good at finding keys."),
         ("The Guide", "lightbulb.fill",
-         "Nobody knows where the Guide came from. He carries a lantern that never goes out. They say he sneaked out himself once, a long time ago, and made it all the way to the festival. Now he turns up whenever a kid needs to practice. He never says how his own story ended."),
+         "Nobody knows where the Guide came from. He carries a lantern that never goes out. They say he sneaked out himself once, a long time ago, and made it all the way to the festival. Now he turns up whenever a kid needs to practice. On No Mercy nights he gets things wrong, and he can get hurt, though he never stays hurt for long. He never says how his own story ended."),
     ]
 
     static let funFacts = [
         "Crouching makes chairs, tables and lamps safe to touch. Loose planks still creak.",
-        "Boxes can be searched again and again: every 4th search has a skill paper until you know Dash and Run.",
+        "Each box can only be searched once. In the hallway, the boxes after the first one hold skill papers until you know Dash and Run.",
         "A search gives an accessory 1 time in 5, a boost 1 time in 15, and the bat 1 time in 12.",
         "If nobody catches you for one minute, they give up. Mom then sleeps for 2 more minutes.",
         "4 chases out of 10, the other grown-up comes over and they talk for a whole minute. That's your chance.",
@@ -878,7 +922,9 @@ enum ItemLore {
         "Keys": "Most were cut by the old locksmith on the corner. The ones you make yourself come from metal scraps and Dad's workbench; the blue one was hung on the dog's collar by Uncle so he'd never lose it.",
         "Skill papers": "Pages from Grandpa's old notebook, \"How to Be Quick and Quiet\". Someone tore them out and hid them at the bottom of boxes.",
         "Star balls": "Tiny pieces of shooting stars. They only land on roofs where somebody is awake to catch them.",
-        "Orbs": "They grow inside the dungeon rocks like pearls in a shell. The shopkeeper says the first one was found by a lost miner's lantern.",
+        "Moonlights": "Little drops of moonlight that collect wherever a kid finishes something brave. Ion keeps them in a jar on his counter; they used to be called orbs, back when he dug them out of the dungeon rocks.",
+        "Car parts": "Uncle's car is older than Grandma's clock. Every part in it has been mended at least twice, mostly with string.",
+        "Upgrade Items": "Uncle learned it fixing that car by the roadside for thirty years. \"Tighten, polish, believe,\" he says.",
         "The golden stick (K)": "Nobody made it and nobody has found it twice. Some say the owl drops it. The owl isn't saying.",
         "The hotel elevator": "Built the same year as the hotel. Uncle swears it rearranges the floors when nobody is looking.",
         "Water spray (J)": "Auntie's hose has watered her backyard for thirty years. It sprays harder than it looks.",
@@ -897,7 +943,13 @@ enum ItemLore {
         "Top Hats": "From the hotel's magic-show night. No rabbit has come out of any of them. Yet.",
         "Hair Bows": "Ribbons saved from every present Auntie ever sent.",
         "Flowers": "Picked from the garden maze. They stay fresh as long as the plants get watered.",
-        "Demo exclusives": "Made by the Orb Shop's keeper out of orb dust. They only exist while the game is a demo.",
+        "Demo exclusives": "Made by Ion out of moonlight dust. They only exist while the game is a demo.",
+        "Bunny Ears": "From the school play where every child was a rabbit. They still twitch a little.",
+        "Wizard Hats": "Ion sews them from his old shop curtains. The stars are real; the magic isn't. Probably.",
+        "Bandanas": "Uncle keeps a drawer of them in the car for windy days with the windows down.",
+        "Monocles": "Grandpa's reading lens, and a few copies Ion had made. Wear one and you feel very important.",
+        "Star Clips": "They fell off the cinema's star curtain, one by one, over many years.",
+        "Cowboy Hats": "From the hotel's Wild West week. The hotel would like them back.",
     ]
 }
 
@@ -930,6 +982,36 @@ struct UpdateLogView: View {
             "Fixed your arms: they hang on the side you're facing, so your hand goes where you go instead of sitting on your tummy. You also only turn left or right when you're really going sideways.",
             "Every dream has a name made of random words, like \"Floating Moon\" or \"Crooked Melting Kitchen\" (a 50/50 chance of an extra word), and its wallpaper, sky, moons and floor are made up by a randomizer.",
             "Fixed the weird crouch: it's a real squat now, knees in front and both feet flat on the floor.",
+        ]),
+        ("Sneeky Nights: Raid", [
+            "Level 9: Raid. Uncle slams on the brakes and a gang of robbers jumps out. Bonk them with the bat (three bonks each, and they talk the whole time), pick up the car parts they pulled off, and fit them back at the car.",
+            "Win Level 9 and Uncle teaches you the Upgrade Items skill: upgrade your boosting and defensive items in the Shop, up to level 3.",
+            "In Level 9 with practice mode on, the Guide fights the robbers with you.",
+            "New side level: The Shop, run by Ion. His eyes follow you around the shop, and your finger or pointer in the shop window.",
+            "The Shop is on the main menu too.",
+            "Ion sells three boosting items for 1000 moonlights each: the Nokia (health ×2), the Phone (press O: notes you can type in, plus Snake, Memory and Moon Catch) and the Sneaky Cape (no noise at all, and every stat ×1.2).",
+            "Ion also sells two new skills for 1569 moonlights each: Double Jump (Space again in the air) and Slide (press C while running).",
+            "Orbs are now called moonlights. You earn them every time you win a level or a side level, even ones you've won before; harder modes pay more.",
+            "The dungeon is gone. Its upgrades, mystery accessories and demo exclusives are in Ion's Shop now.",
+            "Everyone faces north, south, east and west now: your character follows the joystick (you see their back walking up the room and their face walking down), and Mom, Dad, your brother, the Guide and the robbers face the way they walk.",
+            "Customize: 60 new colours for tops, trousers, shoes, hair, caps and eyes, and your own colour for any of them (and your skin) from the colour wheel.",
+            "80 new accessories: the missing colours of the first ten kinds, plus bunny ears, wizard hats, bandanas, monocles, star clips and cowboy hats.",
+            "The cinema (Side Level 4) has been removed.",
+            "Level Maker: toy cars, spikes, strangers, guards, workers and Dad now show their path, and you can change how far they walk each way (or make them stand still).",
+        ]),
+        ("Sneeky Nights: Somewhere", [
+            "Level 8: Somewhere. 50 seconds in Uncle's car, then Grandma's garden: tidy it, find all 20 lanterns and the blue key. Grandma takes a moment to open the door and asks a few questions, then it's chores. Afterwards, chase Uncle's car down the road until he checks his mirror.",
+            "Each box can only be searched once now.",
+            "Lasers are a beam at chest height: crouch under them. Touching one takes half your health instead of ending the level.",
+            "Lava looks like lava now, not a portal.",
+            "Level Maker: make your own hazards (draw one or pick a sample, then set its hitbox and damage), and your own map (colours, wallpaper, floor and a drawing on the wall).",
+            "Chaos mode: Mom and Dad move at 75% of your speed.",
+            "No Mercy: more damage, water puddles in Levels 2 and 3 (they slow you down and wake Mom), the Guide really gets things wrong and can get hurt, and practice mode stays locked until you win the level.",
+            "Modes unlock one level at a time: win a level on Mild to open Hard, Hard to open Chaos, and Chaos (plus 1000 orbs and 35 badges) to open No Mercy. Side levels are open on every mode.",
+            "More to customize: trousers, shorts or a skirt; slippers, sneakers or boots; and five new pictures for your top.",
+            "Settings: the sky can be Afternoon or Sunset now, and Real time shows the afternoon too.",
+            "A less squashed crouch, and lots of small polish.",
+            "The Lore's story has a page for every character.",
         ]),
         ("Sneeky Nights: The Room", [
             "New side level for Guide's Hat owners only: The Room. Its vault has a 10-letter code and no clues. Guess it and the golden stick is yours, no rooftop needed.",

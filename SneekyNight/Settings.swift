@@ -9,12 +9,18 @@ final class Settings {
     var master: Double { didSet { save() } }
     var music: Double { didSet { save() } }
     var effects: Double { didSet { save() } }
-    /// 0 = always night, 1 = always early morning, 2 = follow the real clock in `timeZoneID`.
+    /// 0 = always night, 1 = always early morning, 2 = follow the real clock in `timeZoneID`,
+    /// 3 = always afternoon, 4 = always sunset.
     var skyMode: Int { didSet { save() } }
     /// The time zone picked in Settings (used when the sky follows the real clock).
     var timeZoneID: String { didSet { save() } }
     /// Practice mode: the Guide gives tips and nobody can catch or hurt you.
     var practice: Bool { didSet { save() } }
+    /// Set while a story level is played on No Mercy that you haven't won on No Mercy yet:
+    /// practice mode can't be used there until you have. Not saved.
+    var practiceLocked = false
+    /// Practice mode, if it's allowed right now.
+    var practiceOn: Bool { practice && !practiceLocked }
     /// Creative mode's sky command. Not saved.
     var skyOverride: Sky?
 
@@ -46,6 +52,7 @@ final class Settings {
         case .night: return (0.4, 0.85, false)
         case .dawn: return (0.12, 0.22, true)
         case .day: return (0.5, 1, true)
+        case .afternoon: return (0.7, 0.62, true)
         case .dusk: return (0.88, 0.2, true)
         }
     }
@@ -63,6 +70,8 @@ final class Settings {
         switch skyMode {
         case 1: return .dawn
         case 2: return Sky.at(hour: localHour)
+        case 3: return .afternoon
+        case 4: return .dusk
         default: return .night
         }
     }
@@ -122,12 +131,13 @@ final class Settings {
 
 /// The four looks of the sky. With "real time" on, the hour in your time zone picks one.
 enum Sky: String, CaseIterable {
-    case night, dawn, day, dusk
+    case night, dawn, day, afternoon, dusk
 
     static func at(hour: Int) -> Sky {
         switch hour {
         case 5..<7: .dawn
-        case 7..<17: .day
+        case 7..<13: .day
+        case 13..<17: .afternoon
         case 17..<19: .dusk
         default: .night
         }
@@ -138,6 +148,7 @@ enum Sky: String, CaseIterable {
         case .night: "Night"
         case .dawn: "Sunrise"
         case .day: "Day"
+        case .afternoon: "Afternoon"
         case .dusk: "Sunset"
         }
     }

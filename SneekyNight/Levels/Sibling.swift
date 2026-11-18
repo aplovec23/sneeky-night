@@ -11,6 +11,7 @@ final class SiblingBuddy {
     var state: State = .asleep
     var pos = CGPoint(x: 1050, y: 610)
     var facingRight = false
+    var facing: Facing = .west
     var walking = false
     /// True while the talk menu is open.
     var talking = false
@@ -70,6 +71,7 @@ final class SiblingBuddy {
             pos.x += dx / distance * step
             pos.y += dy / distance * step
             if abs(dx) > 4 { facingRight = dx > 0 }
+            facing = Facing.moving(dx: dx, dy: dy)
             if !walking { walking = true }
         } else if walking {
             walking = false
@@ -93,7 +95,8 @@ struct BuddyView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(.black.opacity(0.4), in: Capsule())
-            CharacterView(look: SiblingBuddy.look, facingRight: buddy.facingRight, walking: buddy.walking, expression: buddy.mood)
+            CharacterView(look: SiblingBuddy.look, facingRight: buddy.facingRight, walking: buddy.walking, expression: buddy.mood,
+                          facing: buddy.walking ? buddy.facing : nil)
         }
         .scaleEffect(0.78, anchor: .bottom)
         .frame(width: 110, height: 150, alignment: .bottom)

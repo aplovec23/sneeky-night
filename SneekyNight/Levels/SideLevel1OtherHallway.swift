@@ -2,7 +2,7 @@ import SwiftUI
 import Observation
 
 /// Side Level 1 rules: the other hallway runs behind your room. Five keys are hidden in the boxes
-/// (boxes can be searched again and again, and boosts turn up a bit more often here). With all
+/// (each box can be searched once, and boosts turn up a bit more often here). With all
 /// five keys the door at the far end opens onto a secret room with a treasure chest: a boost you
 /// don't have yet, or extra colours for Customize Character.
 /// Out of time, too noisy or a bump: Mom comes through your room to find you.
@@ -307,7 +307,7 @@ final class OtherHallwayModel {
         if room == .secretRoom {
             engine.say("Open the treasure chest!")
         } else if keys < Self.keyCount {
-            engine.say("I have \(keys) of \(Self.keyCount) keys. Search every box — and search them again for goodies!")
+            engine.say("I have \(keys) of \(Self.keyCount) keys. Search every box. Each one only once, so check them all!")
         } else {
             engine.say("I have all 5 keys! The door is at the far end of the hallway.")
         }

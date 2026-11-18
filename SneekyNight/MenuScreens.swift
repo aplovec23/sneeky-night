@@ -17,6 +17,7 @@ struct TitleView: View {
     var onMaker: () -> Void = {}
     var onLore: () -> Void = {}
     var onDifficulty: () -> Void = {}
+    var onShop: () -> Void = {}
     @State private var bob = false
 
     private var playTitle: String {
@@ -113,7 +114,11 @@ struct TitleView: View {
                         MenuTile(title: "Lore", symbol: game.loreUnlocked ? "book.fill" : "lock.fill", color: Color(red: 0.50, green: 0.22, blue: 0.35),
                                  action: onLore)
                     }
-                    MenuButton(title: "Update Log", symbol: "newspaper.fill", color: Color(red: 0.55, green: 0.30, blue: 0.55), action: onUpdateLog)
+                    HStack(spacing: 10) {
+                        MenuButton(title: "Shop", symbol: "cart.fill", color: Color(red: 0.15, green: 0.50, blue: 0.50), width: 215, action: onShop)
+                        MenuButton(title: "Update Log", symbol: "newspaper.fill", color: Color(red: 0.55, green: 0.30, blue: 0.55), width: 215, action: onUpdateLog)
+                    }
+                    MoonlightCount(amount: game.moonlights, size: 20)
                     if game.hasCharacter {
                         Text("Playing as \(game.playerName)")
                             .font(.game(20, .semibold))
@@ -142,6 +147,7 @@ struct MenuButton: View {
     let symbol: String
     let color: Color
     var big = false
+    var width: CGFloat = 440
     let action: () -> Void
 
     var body: some View {
@@ -149,19 +155,19 @@ struct MenuButton: View {
             SoundPlayer.shared.tap()
             action()
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: width < 300 ? 8 : 14) {
                 Image(systemName: symbol)
-                    .frame(width: 36)
-                Text(title)
+                    .frame(width: width < 300 ? 26 : 36)
+                Text(title).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.game(20))
                     .opacity(0.6)
             }
-            .font(.game(big ? 34 : 26))
+            .font(.game(big ? 34 : width < 300 ? 22 : 26))
             .foregroundStyle(.white)
-            .padding(.horizontal, 26)
-            .frame(width: 440, height: big ? 80 : 60)
+            .padding(.horizontal, width < 300 ? 16 : 26)
+            .frame(width: width, height: big ? 80 : 60)
             .background(LinearGradient(colors: [color, color.opacity(0.75)], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 24))
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.25), lineWidth: 2))
             .shadow(color: .black.opacity(0.35), radius: 8, y: 5)
@@ -224,6 +230,7 @@ struct HouseView: View {
         case .night: rgb(0.10, 0.22, 0.20)
         case .dawn: rgb(0.24, 0.42, 0.30)
         case .day: rgb(0.36, 0.62, 0.32)
+        case .afternoon: rgb(0.34, 0.56, 0.28)
         case .dusk: rgb(0.20, 0.30, 0.24)
         }
     }
@@ -232,6 +239,7 @@ struct HouseView: View {
         case .night: Self.rgb(0.16, 0.13, 0.26)
         case .dawn: Self.rgb(0.72, 0.58, 0.55)
         case .day: Self.rgb(0.90, 0.82, 0.68)
+        case .afternoon: Self.rgb(0.88, 0.74, 0.58)
         case .dusk: Self.rgb(0.55, 0.38, 0.40)
         }
     }
@@ -240,6 +248,7 @@ struct HouseView: View {
         case .night: Self.rgb(0.24, 0.14, 0.24)
         case .dawn: Self.rgb(0.62, 0.30, 0.30)
         case .day: Self.rgb(0.70, 0.26, 0.22)
+        case .afternoon: Self.rgb(0.68, 0.28, 0.20)
         case .dusk: Self.rgb(0.45, 0.20, 0.25)
         }
     }
@@ -249,6 +258,7 @@ struct HouseView: View {
         case .night: [true, false, false]
         case .dawn: [false, true, false]
         case .day: [false, false, false]
+        case .afternoon: [false, false, false]
         case .dusk: [true, false, true]
         }
     }
@@ -490,16 +500,19 @@ struct CustomizeView: View {
         section("Skin tone") {
             HStack(spacing: 12) {
                 ForEach(LookOptions.skins.indices, id: \.self) { i in
-                    swatch(LookOptions.skins[i], selected: look.skin == i) { look.skin = i }
+                    swatch(LookOptions.skins[i], selected: look.skin == i && look.custom["skin"] == nil) { look.skin = i; look.custom["skin"] = nil }
                 }
+                ownColor("skin")
             }
         }
         section("Eye colour") {
             HStack(spacing: 12) {
                 ForEach(LookOptions.eyes.indices, id: \.self) { i in
-                    swatch(LookOptions.eyes[i], selected: look.eyes == i) { look.eyes = i }
+                    swatch(LookOptions.eyes[i], selected: look.eyes == i && look.custom["eyes"] == nil) { look.eyes = i; look.custom["eyes"] = nil }
                 }
+                ownColor("eyes")
             }
+            moreColors("eyes", base: LookOptions.eyes.count, current: look.eyes) { look.eyes = $0 }
         }
         section("Usual face (in a level it changes by itself: worried, scared, surprised...)") {
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(124), spacing: 10), count: 4), alignment: .leading, spacing: 10) {
@@ -552,12 +565,17 @@ struct CustomizeView: View {
             HStack(spacing: 10) {
                 ForEach(LookOptions.hairColors.indices, id: \.self) { i in
                     if let color = LookOptions.hairColors[i] {
-                        swatch(color, selected: look.hairColor == i) { look.hairColor = i }
+                        swatch(color, selected: look.hairColor == i && look.custom["hair"] == nil) { look.hairColor = i; look.custom["hair"] = nil }
                     } else {
-                        swatch(Color(red: 0.40, green: 0.24, blue: 0.13), selected: look.hairColor == 0) { look.hairColor = 0 }
+                        swatch(Color(red: 0.40, green: 0.24, blue: 0.13), selected: look.hairColor == 0 && look.custom["hair"] == nil) {
+                            look.hairColor = 0
+                            look.custom["hair"] = nil
+                        }
                     }
                 }
+                ownColor("hair")
             }
+            moreColors("hair", base: LookOptions.hairColors.count, current: look.hairColor) { look.hairColor = $0 }
         }
     }
 
@@ -572,9 +590,11 @@ struct CustomizeView: View {
         section("Top colour") {
             HStack(spacing: 12) {
                 ForEach((game.extraColors ? LookOptions.allShirts : LookOptions.shirts).indices, id: \.self) { i in
-                    swatch(LookOptions.allShirts[i], selected: look.shirt == i) { look.shirt = i }
+                    swatch(LookOptions.allShirts[i], selected: look.shirt == i && look.custom["shirt"] == nil) { look.shirt = i; look.custom["shirt"] = nil }
                 }
+                ownColor("shirt")
             }
+            moreColors("shirt", base: LookOptions.allShirts.count, current: look.shirt) { look.shirt = $0 }
         }
         section("Picture on the top") {
             HStack(spacing: 12) {
@@ -613,31 +633,51 @@ struct CustomizeView: View {
                 }
             }
         }
-        section("Trousers") {
-            HStack(spacing: 12) {
-                iconChoice("tshirt", selected: look.pants < 0) { look.pants = -1 }
-                ForEach(LookOptions.pants.indices, id: \.self) { i in
-                    swatch(LookOptions.pants[i], selected: look.pants == i) { look.pants = i }
+        section("Trousers, shorts or a skirt") {
+            HStack(spacing: 10) {
+                ForEach(LookOptions.legStyles.indices, id: \.self) { i in
+                    chip(LookOptions.legStyles[i], selected: look.legStyle == i) { look.legStyle = i }
                 }
             }
         }
-        section("Shoes") {
+        section("Trouser colour") {
             HStack(spacing: 12) {
-                ForEach(LookOptions.shoes.indices, id: \.self) { i in
-                    swatch(LookOptions.shoes[i], selected: look.shoes == i) { look.shoes = i }
+                iconChoice("tshirt", selected: look.pants < 0 && look.custom["pants"] == nil) { look.pants = -1; look.custom["pants"] = nil }
+                ForEach(LookOptions.pants.indices, id: \.self) { i in
+                    swatch(LookOptions.pants[i], selected: look.pants == i && look.custom["pants"] == nil) { look.pants = i; look.custom["pants"] = nil }
+                }
+                ownColor("pants")
+            }
+            moreColors("pants", base: LookOptions.pants.count, current: look.pants) { look.pants = $0 }
+        }
+        section("Shoes") {
+            HStack(spacing: 10) {
+                ForEach(LookOptions.shoeStyles.indices, id: \.self) { i in
+                    chip(LookOptions.shoeStyles[i], selected: look.shoeStyle == i) { look.shoeStyle = i }
                 }
             }
+        }
+        section("Shoe colour") {
+            HStack(spacing: 12) {
+                ForEach(LookOptions.shoes.indices, id: \.self) { i in
+                    swatch(LookOptions.shoes[i], selected: look.shoes == i && look.custom["shoes"] == nil) { look.shoes = i; look.custom["shoes"] = nil }
+                }
+                ownColor("shoes")
+            }
+            moreColors("shoes", base: LookOptions.shoes.count, current: look.shoes) { look.shoes = $0 }
         }
         section("Cap") {
             HStack(spacing: 12) {
                 ForEach((game.extraColors ? LookOptions.allCaps : LookOptions.caps).indices, id: \.self) { i in
                     if let color = LookOptions.allCaps[i] {
-                        swatch(color, selected: look.cap == i) { look.cap = i }
+                        swatch(color, selected: look.cap == i && look.custom["cap"] == nil) { look.cap = i; look.custom["cap"] = nil }
                     } else {
-                        iconChoice("circle.slash", selected: look.cap == 0) { look.cap = 0 }
+                        iconChoice("circle.slash", selected: look.cap == 0 && look.custom["cap"] == nil) { look.cap = 0; look.custom["cap"] = nil }
                     }
                 }
+                ownColor("cap")
             }
+            moreColors("cap", base: LookOptions.allCaps.count, current: look.cap) { look.cap = $0 }
         }
     }
 
@@ -659,7 +699,7 @@ struct CustomizeView: View {
             }
         }
         if !game.accessories.isDisjoint(with: Accessory.exclusives) {
-            section("Demo exclusives (from the dungeon's orb shop)") {
+            section("Demo exclusives (from the Shop)") {
                 HStack(spacing: 12) {
                     ForEach(Accessory.exclusives.filter { game.accessories.contains($0) }) { item in
                         iconChoice(item.symbol, selected: look.accessory == item, tint: item.color) { look.accessory = item }
@@ -673,7 +713,7 @@ struct CustomizeView: View {
         section("Boosts (very rare! They all stack. Tap the eye to hide one)  \(game.boosts.intersection(Boost.findable).count)/\(Boost.findable.count)") {
             VStack(alignment: .leading, spacing: 10) {
                 // The Guide's Hat and the Water Hose only show up once you have them.
-                ForEach(Boost.findable + Boost.special.filter { game.boosts.contains($0) }) { boost in
+                ForEach(Boost.findable + (Boost.special + Boost.shopOnly).filter { game.boosts.contains($0) }) { boost in
                     boostRow(boost)
                 }
             }
@@ -753,6 +793,44 @@ struct CustomizeView: View {
                 .overlay(Capsule().stroke(selected ? Palette.gold : .white.opacity(0.2), lineWidth: selected ? 4 : 2))
         }
         .buttonStyle(PressableStyle())
+    }
+
+    /// The 60 shared colours, in a row you can scroll. Picking one clears your own colour for that part.
+    private func moreColors(_ part: String, base: Int, current: Int, set: @escaping (Int) -> Void) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(LookOptions.palette.indices, id: \.self) { k in
+                    Button(action: pick {
+                        set(base + k)
+                        look.custom[part] = nil
+                    }) {
+                        Circle().fill(LookOptions.palette[k]).frame(width: 34, height: 34)
+                            .overlay(Circle().stroke(current == base + k && look.custom[part] == nil ? Palette.gold : .white.opacity(0.25),
+                                                     lineWidth: current == base + k && look.custom[part] == nil ? 4 : 1.5))
+                    }
+                    .buttonStyle(PressableStyle())
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .frame(width: 640)
+    }
+
+    /// Any colour at all, from the colour wheel. It's kept until you pick a swatch again.
+    private func ownColor(_ part: String) -> some View {
+        ColorPicker(selection: Binding(
+            get: { look.custom[part].flatMap(Color.init(hex:)) ?? .white },
+            set: { look.custom[part] = $0.hex }
+        ), supportsOpacity: false) {
+            EmptyView()
+        }
+        .labelsHidden()
+        .frame(width: 50, height: 50)
+        .background(Circle().fill(AngularGradient(colors: [.red, .yellow, .green, .cyan, .blue, .purple, .red], center: .center)).opacity(look.custom[part] == nil ? 0.35 : 0))
+        .overlay(Circle().stroke(look.custom[part] != nil ? Palette.gold : .white.opacity(0.3), lineWidth: look.custom[part] != nil ? 5 : 2).allowsHitTesting(false))
+        .overlay(alignment: .bottom) {
+            Text("Own").font(.game(11, .heavy)).foregroundStyle(.white).offset(y: 14).allowsHitTesting(false)
+        }
     }
 
     private func swatch(_ color: Color, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -1210,13 +1288,13 @@ struct LevelSelectView: View {
                     .font(.game(21, .semibold))
                     .foregroundStyle(.white)
                 }
-                Text("Orbs come from the dungeon (Side Level 2) and the cinema (Side Level 4).")
+                Text("Moonlights come from winning levels and side levels (again counts too).")
                     .font(.game(15, .medium))
                     .foregroundStyle(.white.opacity(0.65))
                 HStack(spacing: 14) {
                     BigButton(title: "Not now", color: .gray) { gateOpen = false }
                     if game.level7Requirements.allSatisfy(\.met) {
-                        BigButton(title: "Pay \(GameState.level7Price) orbs", symbol: "circle.hexagongrid.fill") {
+                        BigButton(title: "Pay \(GameState.level7Price) moonlights", symbol: "circle.hexagongrid.fill") {
                             if game.payForLevel7() {
                                 Sound.unlock.play()
                                 gateOpen = false
@@ -1253,7 +1331,7 @@ struct LevelSelectView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 if gated {
-                    Text("\(GameState.level7Badges) badges · \(GameState.level7Price) orbs")
+                    Text("\(GameState.level7Badges) badges · \(GameState.level7Price) moonlights")
                         .font(.game(13, .heavy))
                         .foregroundStyle(Palette.gold)
                 }

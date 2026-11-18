@@ -1,5 +1,20 @@
 import SwiftUI
 
+/// Which way a character is facing on screen: north (away from you, up the room), south (toward
+/// you), east (right) or west (left). The player follows the joystick; everyone else faces the way
+/// they're walking.
+enum Facing: Equatable {
+    case north, south, east, west
+
+    /// The way something moving by (dx, dy) faces. Mostly up or down: north or south; otherwise east or west.
+    static func moving(dx: CGFloat, dy: CGFloat) -> Facing {
+        if abs(dy) > abs(dx) * 1.15 { return dy < 0 ? .north : .south }
+        return dx >= 0 ? .east : .west
+    }
+
+    var isSideways: Bool { self == .east || self == .west }
+}
+
 /// The player, drawn from simple shapes. Its frame is 100×160 with the feet at the bottom.
 struct CharacterView: View {
     var look: Look
@@ -11,10 +26,13 @@ struct CharacterView: View {
     var expression: Mood?
     /// Draws one moment of the animation instead of playing it (for pictures of the poses).
     var frozenTime: Double?
+    /// North shows your back, south your front; east, west or nil the usual side-on look (`facingRight`).
+    var facing: Facing?
 
     init(look: Look, facingRight: Bool = true, walking: Bool = false, crouching: Bool = false, taunting: Bool = false,
-         expression: Mood? = nil, frozenTime: Double? = nil) {
+         expression: Mood? = nil, frozenTime: Double? = nil, facing: Facing? = nil) {
         self.look = look
+        self.facing = facing
         self.facingRight = facingRight
         self.walking = walking
         self.crouching = crouching
@@ -24,6 +42,9 @@ struct CharacterView: View {
     }
 
     private var mood: Mood { expression ?? Mood(rawValue: look.face) ?? .calm }
+    /// Seen from behind (walking up the room) or from the front (walking down it).
+    private var back: Bool { facing == .north }
+    private var front: Bool { facing == .south }
 
     init(gender: Gender, facingRight: Bool = true) {
         self.init(look: .starter(gender), facingRight: facingRight)
@@ -52,27 +73,46 @@ struct CharacterView: View {
                breath: sin(t * (crouching ? 2.4 : 1.8) + Double(look.skin)), time: t)
     }
 
-    private var skin: Color { LookOptions.skins[look.skin % LookOptions.skins.count] }
-    private var shirt: Color { LookOptions.allShirts[look.shirt % LookOptions.allShirts.count] }
+    private var skin: Color { look.skinColor }
+    private var shirt: Color { look.shirtColor }
     private var pattern: String? { LookOptions.patterns[look.pattern % LookOptions.patterns.count] }
-    private var cap: Color? { LookOptions.allCaps[look.cap % LookOptions.allCaps.count] }
+    private var cap: Color? { look.capColor }
     private var hair: Color {
-        if look.hairColor > 0, let picked = LookOptions.hairColors[look.hairColor % LookOptions.hairColors.count] { return picked }
+        if let picked = look.hairPick { return picked }
         return look.gender == .boy ? Color(red: 0.33, green: 0.21, blue: 0.12) : Color(red: 0.55, green: 0.30, blue: 0.14)
     }
 
     /// Trousers: the chosen colour, or the T-shirt colour a little darker (the original look).
-    private var trousers: Color { look.pants >= 0 ? LookOptions.pants[look.pants % LookOptions.pants.count] : shirt }
-    private var trouserShade: Double { look.pants >= 0 ? 0 : -0.22 }
-    private var shoe: Color { LookOptions.shoes[abs(look.shoes) % LookOptions.shoes.count] }
-    private var eyeColor: Color { LookOptions.eyes[abs(look.eyes) % LookOptions.eyes.count] }
+    private var trousers: Color { look.pantsColor ?? shirt }
+    private var trouserShade: Double { look.pantsColor != nil ? 0 : -0.22 }
+    private var shoe: Color { look.shoeColor }
+    private var eyeColor: Color { look.eyeColor }
 
     private func leg(_ angle: Double) -> some View {
         VStack(spacing: -4) {
-            Capsule().fill(trousers).brightness(trouserShade).frame(width: 17, height: 40)
-            Capsule().fill(shoe).frame(width: 24, height: 11).offset(x: 4)
+            // Shorts and skirts show the leg below the knee.
+            ZStack(alignment: .top) {
+                if look.legStyle != 0 { Capsule().fill(skin).frame(width: 14, height: 40) }
+                Capsule().fill(trousers).brightness(trouserShade).frame(width: 17, height: look.legStyle == 0 ? 40 : look.legStyle == 1 ? 21 : 12)
+            }
+            .frame(width: 17, height: 40, alignment: .top)
+            shoeShape.offset(x: 4)
         }
         .rotationEffect(.degrees(angle), anchor: .top)
+    }
+
+    /// Slippers, sneakers (with a white sole) or boots (taller at the ankle). 24 wide, 11 tall.
+    private var shoeShape: some View {
+        ZStack(alignment: .bottom) {
+            if look.shoeStyle == 2 {
+                RoundedRectangle(cornerRadius: 4).fill(shoe).brightness(-0.05).frame(width: 15, height: 15).offset(x: -3, y: -6)
+            }
+            Capsule().fill(shoe).frame(width: 24, height: 11)
+            if look.shoeStyle == 1 {
+                Capsule().fill(.white).frame(width: 25, height: 4)
+            }
+        }
+        .frame(width: 24, height: 11, alignment: .bottom)
     }
 
     // The character is drawn turned a little toward the way they face (facing right; the whole
@@ -98,10 +138,11 @@ struct CharacterView: View {
             Path { p in p.move(to: hip); p.addLine(to: knee) }
                 .stroke(trousers, style: StrokeStyle(lineWidth: 16, lineCap: .round))
                 .brightness(trouserShade + (far ? -0.08 : 0))
+            // Shorts and skirts show the leg below the knee.
             Path { p in p.move(to: knee); p.addLine(to: foot) }
-                .stroke(trousers, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-                .brightness(trouserShade + (far ? -0.1 : -0.03))
-            Capsule().fill(shoe).brightness(far ? -0.06 : 0).frame(width: 24, height: 11).position(x: foot.x + 5, y: foot.y + 2.5)
+                .stroke(look.legStyle == 0 ? trousers : skin, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                .brightness((look.legStyle == 0 ? trouserShade : 0) + (far ? -0.1 : -0.03))
+            shoeShape.brightness(far ? -0.06 : 0).position(x: foot.x + 5, y: foot.y + 2.5)
         }
     }
 
@@ -130,16 +171,30 @@ struct CharacterView: View {
                 crouchLeg(hip: CGPoint(x: 52, y: 126), knee: CGPoint(x: 80 + step, y: 121),
                           foot: CGPoint(x: 72 + step, y: 142 - max(0, step) * 0.6), far: false)
                     .transition(.identity)
+            } else if back || front {
+                // Walking toward or away from you: the legs step up and down instead of swinging.
+                leg(0).position(x: 40, y: 126 - max(0, swing) * 5)
+                    .transition(.identity)
+                leg(0).position(x: 60, y: 126 - max(0, -swing) * 5)
+                    .transition(.identity)
             } else {
                 leg(swing * 28).position(x: 42, y: 126)
                     .transition(.identity)
                 leg(-swing * 28).position(x: 58, y: 126)
                     .transition(.identity)
             }
+            if look.legStyle == 2 {
+                // The skirt, flaring out over the tops of the legs.
+                Trapezoid().fill(trousers).brightness(trouserShade)
+                    .frame(width: 46, height: 26)
+                    .position(x: 50, y: 113 + drop)
+                    .transition(.identity)
+            }
             // Every few seconds a standing character glances one way, then the other.
             let eyesTurn = crouching ? breath * 2.2 : walking ? 0 : glanceAt(time)
-            upperBody(backArm: backArm, frontArm: frontArm, swing: swing, glance: eyesTurn, time: time)
-                .rotationEffect(.degrees(crouching ? 9 + swing * 2 : idle * 1.2), anchor: .bottom)
+            upperBody(backArm: back || front ? backArm * 0.4 : backArm, frontArm: back || front ? frontArm * 0.4 : frontArm,
+                      swing: swing, glance: eyesTurn, time: time)
+                .rotationEffect(.degrees(crouching && !(back || front) ? 9 + swing * 2 : idle * 1.2), anchor: .bottom)
                 .offset(y: drop + CGFloat(idle) * 1.2 + (walking && !crouching ? -abs(CGFloat(swing)) * 2.5 : 0))
         }
         .rotationEffect(.degrees(wiggle * 8), anchor: .bottom)
@@ -155,6 +210,14 @@ struct CharacterView: View {
 
     private func upperBody(backArm: Double, frontArm: Double, swing: Double, glance: Double = 0, time: Double = 0) -> some View {
         ZStack {
+            if look.shownBoosts.contains(.sneakyCape) && !back {
+                // Ion's Sneaky Cape: long, dark and soundless, with a silver clasp.
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(colors: [Boost.sneakyCape.color, Boost.sneakyCape.color.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: back ? 54 : 40, height: 80)
+                    .rotationEffect(.degrees(back || front ? 0 : 10 + swing * 7), anchor: .top)
+                    .position(x: back || front ? 50 : 32, y: 100)
+            }
             if let cape = look.accessory, cape.family == .cape {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(cape.color)
@@ -170,11 +233,26 @@ struct CharacterView: View {
             arm(backArm, far: true).position(x: Self.farShoulder, y: 82)
             torso
             arm(frontArm, far: false).position(x: Self.nearShoulder, y: 82)
+            if look.shownBoosts.contains(.sneakyCape) && back {
+                // From behind, the cape covers your back.
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(colors: [Boost.sneakyCape.color, Boost.sneakyCape.color.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 50, height: 78).position(x: 50, y: 98)
+            }
 
             // Head
             Circle().fill(skin).frame(width: 54, height: 54).position(x: 50, y: 38)
-            // Ears
-            Ellipse().fill(skin).brightness(-0.05).frame(width: 9, height: 13).position(x: 40, y: 42)
+            // Ears: one side-on; both from the front or the back.
+            if back || front {
+                Ellipse().fill(skin).brightness(-0.05).frame(width: 9, height: 13).position(x: 23, y: 42)
+                Ellipse().fill(skin).brightness(-0.05).frame(width: 9, height: 13).position(x: 77, y: 42)
+            } else {
+                Ellipse().fill(skin).brightness(-0.05).frame(width: 9, height: 13).position(x: 40, y: 42)
+            }
+            if back && style != 17 {
+                // The back of your head: all hair (unless you're bald).
+                Circle().fill(hair).frame(width: 56, height: 56).position(x: 50, y: 36)
+            }
             if let cap {
                 Circle().trim(from: 0.5, to: 1).fill(cap).frame(width: 60, height: 60).position(x: 50, y: 34)
                 Capsule().fill(cap).brightness(-0.12).frame(width: 30, height: 9).position(x: 76, y: 31)
@@ -182,7 +260,10 @@ struct CharacterView: View {
             } else {
                 hairOnTop
             }
-            face(glance: glance, time: time)
+            if !back {
+                // From the front the face sits in the middle of the head.
+                face(glance: glance, time: time).offset(x: front ? -13.5 : 0)
+            }
             accessory
         }
     }
@@ -210,7 +291,7 @@ extension CharacterView {
             Rectangle().fill(shirt).brightness(-0.12).frame(width: 3, height: 50).position(x: 54, y: 86)
         default: EmptyView()
         }
-        if let id = look.photo, let picture = ShirtPhotos.image(id) {
+        if let id = look.photo, let picture = ShirtPhotos.image(id), !back {
             Image(uiImage: picture)
                 .resizable()
                 .scaledToFill()
@@ -218,12 +299,12 @@ extension CharacterView {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.7), lineWidth: 1.5))
                 .position(x: 45, y: 82)
-        } else if let pattern, look.shirtStyle != 3 {
+        } else if let pattern, look.shirtStyle != 3, !back {
             // In the middle of the chest, where the near arm doesn't cover it.
             Image(systemName: pattern)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(look.shirt == 5 ? Color.white : Palette.gold)
-                .position(x: 46, y: 77)
+                .position(x: front ? 50 : 46, y: 77)
         }
     }
 
@@ -254,6 +335,7 @@ extension CharacterView {
         }
         if look.blush {
             Circle().fill(Color.pink.opacity(mood == .happy ? 0.5 : 0.32)).frame(width: 9).position(x: 76, y: 50)
+            if front { Circle().fill(Color.pink.opacity(mood == .happy ? 0.5 : 0.32)).frame(width: 9).position(x: 51, y: 50) }
         }
         if look.freckles {
             ForEach(0..<4, id: \.self) { i in
@@ -472,7 +554,12 @@ extension CharacterView {
     /// followed by any boosting accessories, which all show at once.
     @ViewBuilder fileprivate var accessory: some View {
         if let item = look.accessory {
-            wear(item.family, item.color)
+            // Glasses go with the face: in the middle from the front, and out of sight from behind.
+            if item.family == .glasses || item.family == .monocle {
+                if !back { wear(item.family, item.color).offset(x: front ? -13.5 : 0) }
+            } else {
+                wear(item.family, item.color)
+            }
         }
         boostGear
     }
@@ -535,6 +622,32 @@ extension CharacterView {
             Circle().fill(Color.yellow).frame(width: 7).position(x: 36, y: 14)
         case .cape:
             EmptyView()
+        case .bunnyEars:
+            ForEach([36.0, 62.0], id: \.self) { x in
+                Capsule().fill(color).frame(width: 14, height: 40).rotationEffect(.degrees(x < 50 ? -12 : 10)).position(x: x, y: -2)
+                Capsule().fill(Color.pink.opacity(0.8)).frame(width: 6, height: 28).rotationEffect(.degrees(x < 50 ? -12 : 10)).position(x: x, y: 0)
+            }
+        case .wizardHat:
+            Triangle().fill(color).frame(width: 44, height: 52).position(x: 50, y: -10)
+            Capsule().fill(color).brightness(-0.12).frame(width: 66, height: 9).position(x: 50, y: 14)
+            Image(systemName: "star.fill").font(.system(size: 11)).foregroundStyle(.yellow).position(x: 46, y: -6)
+            Image(systemName: "moon.fill").font(.system(size: 9)).foregroundStyle(.yellow).position(x: 56, y: 6)
+        case .bandana:
+            Circle().trim(from: 0.5, to: 1).fill(color).frame(width: 60, height: 58).position(x: 50, y: 33)
+            ForEach(0..<6, id: \.self) { i in
+                Circle().fill(.white.opacity(0.7)).frame(width: 4).position(x: 30 + CGFloat(i) * 8, y: 18 + CGFloat(i % 2) * 6)
+            }
+            Triangle().fill(color).frame(width: 14, height: 16).rotationEffect(.degrees(-60)).position(x: 20, y: 30)
+        case .monocle:
+            Circle().stroke(color, lineWidth: 3).frame(width: 15).position(x: 71, y: 40)
+            Capsule().fill(color).frame(width: 2, height: 26).rotationEffect(.degrees(-20)).position(x: 76, y: 58)
+        case .starClip:
+            Image(systemName: "star.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(color)
+                .shadow(color: color.opacity(0.7), radius: 4).position(x: 38, y: 12)
+        case .cowboyHat:
+            Ellipse().fill(color).brightness(-0.08).frame(width: 82, height: 14).position(x: 50, y: 14)
+            RoundedRectangle(cornerRadius: 12).fill(color).frame(width: 42, height: 28).position(x: 50, y: 2)
+            Rectangle().fill(.black.opacity(0.35)).frame(width: 42, height: 5).position(x: 50, y: 10)
         }
     }
 
@@ -587,6 +700,19 @@ extension CharacterView {
             Circle().stroke(Color(red: 0.20, green: 0.62, blue: 0.30), lineWidth: 4).frame(width: 26).position(x: 38, y: 78)
             Circle().stroke(Color(red: 0.20, green: 0.62, blue: 0.30), lineWidth: 4).frame(width: 18).position(x: 38, y: 78)
             Capsule().fill(Palette.gold).frame(width: 6, height: 12).rotationEffect(.degrees(30)).position(x: 48, y: 92)
+        }
+        if look.shownBoosts.contains(.sneakyCape) && !back {
+            Circle().fill(Color(white: 0.85)).frame(width: 9).position(x: 50, y: 64)
+        }
+        if look.shownBoosts.contains(.nokia) {
+            // The Nokia, clipped to your belt
+            RoundedRectangle(cornerRadius: 3).fill(Boost.nokia.color).frame(width: 11, height: 20).position(x: 36, y: 108)
+            RoundedRectangle(cornerRadius: 1).fill(Color(red: 0.6, green: 0.8, blue: 0.5)).frame(width: 7, height: 6).position(x: 36, y: 103)
+        }
+        if look.shownBoosts.contains(.phone) && !back {
+            // The Phone, peeking out of a pocket
+            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.9)).frame(width: 11, height: 18).position(x: 64, y: 101)
+            RoundedRectangle(cornerRadius: 2).fill(Color(red: 0.3, green: 0.4, blue: 0.9)).frame(width: 8, height: 12).position(x: 64, y: 101)
         }
         if look.shownBoosts.contains(.lightningBall) {
             Image(systemName: "bolt.circle.fill").font(.system(size: 22)).foregroundStyle(.yellow)

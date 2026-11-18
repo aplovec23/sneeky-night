@@ -8,6 +8,14 @@ import Combine
 struct UncleCarView: View {
     @Environment(GameState.self) private var game
     let onExit: () -> Void
+    /// Level 8 uses the same ride: shorter, straight into the car, with its own lines and title,
+    /// and `onArrive` instead of the Level 6 scenes at the end.
+    var rideLength = UncleCarView.rideSeconds
+    var startInCar = false
+    var destination = "Auntie's city"
+    var lines = UncleCarView.chatter
+    var rideTitle = "Side Level 3 · Uncle's Car"
+    var onArrive: (() -> Void)?
 
     enum Stage { case boarding, driving, preview }
 
@@ -87,12 +95,13 @@ struct UncleCarView: View {
         .background(Color.black)
         .ignoresSafeArea()
         .onReceive(tick) { _ in advance(0.1) }
+        .onAppear { if startInCar && stage == .boarding { start(.driving) } }
     }
 
     private var title: String {
         switch stage {
         case .boarding: "Side Level 3 · Behind the Hotel"
-        case .driving: "Side Level 3 · Uncle's Car"
+        case .driving: rideTitle
         case .preview: "A look at Level 6"
         }
     }
@@ -104,7 +113,7 @@ struct UncleCarView: View {
         lineAge = 0
         if next == .preview {
             slide = 0
-            game.completedSide.insert(3)
+            game.finishSide(3)
             Sound.win.play()
         }
     }
@@ -120,14 +129,16 @@ struct UncleCarView: View {
         case .driving:
             // Uncle says something new every 22 seconds (or when you tap him).
             lineAge += dt
-            if lineAge > 22 { nextLine() }
-            if clock >= Self.rideSeconds { start(.preview) }
+            if lineAge > (rideLength < 120 ? 9 : 22) { nextLine() }
+            if clock >= rideLength {
+                if let onArrive { onArrive() } else { start(.preview) }
+            }
         case .preview: break
         }
     }
 
     private func nextLine() {
-        line = (line + 1) % Self.chatter.count
+        line = (line + 1) % lines.count
         lineAge = 0
     }
 
@@ -199,7 +210,7 @@ struct UncleCarView: View {
                     }
                     .frame(height: 200, alignment: .bottom)
                     .offset(y: road - 200)
-                    .opacity(min(1, 0.25 + clock / Self.rideSeconds))
+                    .opacity(min(1, 0.25 + clock / rideLength))
                     scroll(t, speed: 260, spacing: 330, w: w) { i in
                         if i % 3 == 0 {
                             ZStack(alignment: .top) {
@@ -229,7 +240,7 @@ struct UncleCarView: View {
                             SoundPlayer.shared.tap()
                             nextLine()
                         }
-                    SpeechBubble(text: "Uncle: \(Self.chatter[line])", tint: .orange)
+                    SpeechBubble(text: "Uncle: \(lines[line % lines.count])", tint: .orange)
                         .position(x: w * 0.5, y: road - 330)
                         .id(line)
                         .transition(.opacity)
@@ -256,15 +267,15 @@ struct UncleCarView: View {
     }
 
     private var rideBar: some View {
-        let left = max(0, Self.rideSeconds - clock)
+        let left = max(0, rideLength - clock)
         let whole = Int(left.rounded(.up))
         return VStack(spacing: 8) {
-            Text("Auntie's city: \(whole / 60):\(String(format: "%02d", whole % 60)) to go   ·   tap the car to hear Uncle")
+            Text("\(destination): \(whole / 60):\(String(format: "%02d", whole % 60)) to go   ·   tap the car to hear Uncle")
                 .font(.game(20, .semibold))
                 .foregroundStyle(.white)
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.2))
-                Capsule().fill(Palette.gold).frame(width: 520 * min(1, clock / Self.rideSeconds))
+                Capsule().fill(Palette.gold).frame(width: 520 * min(1, clock / rideLength))
             }
             .frame(width: 520, height: 10)
         }

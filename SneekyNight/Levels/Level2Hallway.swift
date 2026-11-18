@@ -82,6 +82,7 @@ final class HallwayModel {
     init() {
         engine.onInteract = { [weak self] i in self?.interact(i) }
         engine.onHazard = { [weak self] i in self?.bumped(i) }
+        engine.onPuddle = { [weak self] in self?.splashed() }
         engine.onTimeUp = { [weak self] in self?.momWakesUp(tooLoud: false) }
         engine.onTooLoud = { [weak self] in self?.momWakesUp(tooLoud: true) }
         engine.onShieldUsed = { [weak self] in
@@ -147,9 +148,11 @@ final class HallwayModel {
         paperBox = ["box1", "box2", "box3", "box4"].randomElement()!
         paperFound = false
         boxChecks = 0
-        saved = [.siblingRoom: Self.siblingRoomThings(), .momRoom: Self.momRoomThings()]
+        saved = [.siblingRoom: Self.siblingRoomThings() + Self.puddles([(880, 620)]),
+                 .momRoom: Self.momRoomThings() + Self.puddles([(1010, 660)])]
         room = .hallway
-        engine.load(SceneLayout(width: Self.hallWidth, floor: Self.floor, things: Self.hallThings(), spawn: CGPoint(x: 220, y: 610)))
+        engine.load(SceneLayout(width: Self.hallWidth, floor: Self.floor,
+                                things: Self.hallThings() + Self.puddles([(980, 655), (1960, 600), (2650, 670)]), spawn: CGPoint(x: 220, y: 610)))
         engine.timeLeft = Levels.time(2)
         engine.timerOn = true
         engine.resetNoise()
@@ -186,6 +189,14 @@ final class HallwayModel {
     }
 
     // MARK: Rooms
+
+    /// No Mercy only: water puddles on the floor. Wading slows you down, and the splash wakes Mom.
+    static func puddles(_ spots: [(CGFloat, CGFloat)]) -> [Thing] {
+        guard Difficulty.current == .noMercy else { return [] }
+        return spots.enumerated().map { n, spot in
+            Thing(id: "puddle\(n)", kind: "puddle", pos: CGPoint(x: spot.0, y: spot.1), footprint: CGSize(width: 110, height: 34), flat: true)
+        }
+    }
 
     static func onWall(_ id: String, _ kind: String, x: CGFloat, prompt: String?, reach: CGFloat = 70) -> Thing {
         Thing(id: id, kind: kind, pos: CGPoint(x: x, y: floor.lowerBound), prompt: prompt, reach: CGSize(width: reach, height: 160))
@@ -478,7 +489,7 @@ final class HallwayModel {
         }
     }
 
-    /// Every box can be checked again and again; every 4th check turns up a skill paper.
+    /// Each box can be checked once; after the first box, the others hold the skill papers.
     private func searchBox(_ i: Int) {
         boxChecks += 1
         engine.things[i].open = true
@@ -492,8 +503,9 @@ final class HallwayModel {
             })
             return
         }
-        let nextSkill = Skill.allCases.first { !knownSkills().contains($0) }
-        if boxChecks % 4 == 0, let skill = nextSkill {
+        let nextSkill = Skill.papers.first { !knownSkills().contains($0) }
+        // Each box can only be searched once, so after the first one, the boxes hold the skill papers.
+        if boxChecks >= 2, let skill = nextSkill {
             Sound.magic.play()
             show(Popup(title: "Skill paper!", message: "You learned \(skill.title)!\n\(skill.how)",
                        symbol: skill == .dash ? "wind" : "figure.run", color: .cyan, button: "Cool!") { [weak self] in
@@ -503,8 +515,8 @@ final class HallwayModel {
         } else if let loot = rollLoot() {
             Sound.magic.play()
             show(.loot(loot) { [weak self] in self?.take(loot) })
-        } else if boxChecks % 4 == 2 && nextSkill != nil {
-            engine.say("Hmm... something rustles at the bottom. Keep checking the boxes!")
+        } else if boxChecks == 1 && nextSkill != nil {
+            engine.say("Hmm... something rustles in the other boxes. Check them all!")
         } else {
             engine.say(["Just old clothes.", "Only some books in here.", "Lots of tangled wires.", "A rubber chicken? Weird."].randomElement()!)
         }
@@ -751,6 +763,12 @@ final class HallwayModel {
     // MARK: Getting caught
 
     /// Bumping something makes a noise, and Mom gets up to see what it was.
+    /// No Mercy: a splash in a puddle wakes Mom.
+    private func splashed() {
+        guard phase == .sneaking, !chase.active else { return }
+        chase.alarm(.mom, "SPLASH! You stepped in a puddle. Mom heard it!")
+    }
+
     private func bumped(_ i: Int) {
         let hazard = engine.things[i].hazard
         if hazard == .toy { award(.deadlySqueak) }
@@ -1014,6 +1032,7 @@ struct HallwayLevelView: View {
 
     @ViewBuilder private func floorItem(_ thing: Thing) -> some View {
         switch thing.kind {
+        case "puddle": PuddleView(size: thing.footprint).offset(y: thing.footprint.height / 2)
         case "box": CardboardBox(open: thing.open)
         case "chair": ChairView()
         case "lamp": FloorLampView()

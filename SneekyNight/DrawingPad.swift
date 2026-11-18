@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One line drawn on the pad.
-struct PadStroke: Codable {
+struct PadStroke: Codable, Equatable {
     var color: Int
     var width: Double
     var points: [CGPoint]
@@ -11,9 +11,26 @@ struct PadStroke: Codable {
 /// so it's still there the next time you pick up the paper.
 struct DrawingPad: View {
     let onDone: () -> Void
+    /// Set when the drawing belongs to something else (a Level Maker hazard or map): it's handed back
+    /// here instead of being kept as your brother's paper.
+    private var onSave: (([PadStroke]) -> Void)?
+    private var title = "Draw something!"
 
     @State private var strokes: [PadStroke] = DrawingPad.saved()
     @State private var current: PadStroke?
+
+    /// Your brother's paper: the drawing is kept on the device.
+    init(onDone: @escaping () -> Void) {
+        self.onDone = onDone
+    }
+
+    /// Drawing something for the Level Maker, starting from `strokes`.
+    init(strokes: [PadStroke], title: String, onSave: @escaping ([PadStroke]) -> Void) {
+        self.onDone = {}
+        self.onSave = onSave
+        self.title = title
+        _strokes = State(initialValue: strokes)
+    }
     @State private var color = 0
     @State private var width = 6.0
 
@@ -36,15 +53,17 @@ struct DrawingPad: View {
             VStack(spacing: 12) {
                 HStack {
                     Image(systemName: "pencil.and.scribble").foregroundStyle(Palette.gold)
-                    Text("Draw something!")
+                    Text(title)
                     Spacer()
                     tool("Undo", "arrow.uturn.backward", .gray) {
                         if !strokes.isEmpty { strokes.removeLast() }
                     }
                     tool("New page", "doc.fill", Color(red: 0.7, green: 0.3, blue: 0.3)) { strokes = [] }
                     tool("Done", "checkmark", Palette.button) {
-                        save()
-                        onDone()
+                        if let onSave { onSave(strokes) } else {
+                            save()
+                            onDone()
+                        }
                     }
                 }
                 .font(.game(30, .heavy))

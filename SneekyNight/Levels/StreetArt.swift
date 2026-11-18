@@ -5,17 +5,20 @@ import SwiftUI
 /// A grown-up you don't know: strangers on the street, hotel guards and workers, and Uncle.
 /// The frame is 140×250 with the feet at the bottom; they face right.
 struct PersonView: View {
-    enum Outfit: Equatable { case stranger(Int), guardian, worker(Int), uncle }
+    enum Outfit: Equatable { case stranger(Int), guardian, worker(Int), uncle, robber(Int) }
 
     let outfit: Outfit
     var walking = false
     /// Their face. Nil: the usual one for their job (grumpy strangers, watchful guards, cheerful Uncle).
     var expression: Mood?
+    /// North: their back (walking up the room). South: facing you. Nil, east or west: side-on.
+    var facing: Facing?
 
     private var mood: Mood {
         if let expression { return expression }
         switch outfit {
         case .stranger: return .cross
+        case .robber: return .sneaky
         case .guardian: return .sneaky
         case .worker: return .calm
         case .uncle: return .happy
@@ -29,6 +32,7 @@ struct PersonView: View {
         case .guardian: Color(red: 0.12, green: 0.16, blue: 0.32)
         case .worker(let i): i % 2 == 0 ? Color(red: 0.62, green: 0.14, blue: 0.20) : Color(red: 0.85, green: 0.85, blue: 0.90)
         case .uncle: Color(red: 0.35, green: 0.28, blue: 0.22)
+        case .robber: Color(white: 0.12)
         }
     }
     private var skin: Color {
@@ -37,6 +41,7 @@ struct PersonView: View {
         case .guardian: LookOptions.skins[3]
         case .worker(let i): LookOptions.skins[abs(i + 1) % LookOptions.skins.count]
         case .uncle: LookOptions.skins[1]
+        case .robber(let i): LookOptions.skins[abs(i * 3 + 2) % LookOptions.skins.count]
         }
     }
 
@@ -62,8 +67,14 @@ struct PersonView: View {
             arm.rotationEffect(.degrees(frontArmAngle(swing)), anchor: .top).position(x: holdsSomething ? 78 : 92, y: 132)
             // Head
             Circle().fill(skin).frame(width: 60, height: 60).position(x: 72, y: 52)
+            if facing == .north {
+                // The back of their head.
+                Circle().fill(Color(white: 0.22)).frame(width: 56).position(x: 72, y: 48)
+            }
             hat
-            face
+            if facing != .north {
+                face.offset(x: facing == .south ? -13 : 0)
+            }
         }
     }
 
@@ -117,6 +128,13 @@ struct PersonView: View {
         case .stranger:
             // Hands deep in a hoodie pocket
             RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.18)).frame(width: 46, height: 22).position(x: 74, y: 150)
+        case .robber:
+            // A stripy jumper, and a sack over one shoulder
+            ForEach(0..<5, id: \.self) { n in
+                Rectangle().fill(.white.opacity(0.85)).frame(width: 74, height: 7).position(x: 70, y: 90 + CGFloat(n) * 18)
+            }
+            Ellipse().fill(Color(red: 0.55, green: 0.42, blue: 0.28)).frame(width: 46, height: 54).position(x: 40, y: 104)
+            Text("$").font(.game(20, .heavy)).foregroundStyle(.black.opacity(0.5)).position(x: 40, y: 106)
         }
     }
 
@@ -136,10 +154,20 @@ struct PersonView: View {
             }
         case .uncle:
             Circle().trim(from: 0.5, to: 1).fill(Color(white: 0.55)).frame(width: 62, height: 58).position(x: 72, y: 48)
+        case .robber:
+            // A black beanie
+            Circle().trim(from: 0.5, to: 1).fill(Color(white: 0.1)).frame(width: 64, height: 62).position(x: 72, y: 46)
+            Capsule().fill(Color(white: 0.18)).frame(width: 66, height: 10).position(x: 72, y: 46)
         }
     }
 
     @ViewBuilder private var face: some View {
+        if case .robber = outfit {
+            // The black eye mask, behind the eyes
+            Capsule().fill(.black).frame(width: 38, height: 14).position(x: 85, y: 51)
+            Circle().fill(.white).frame(width: 10).position(x: 78, y: 51)
+            Circle().fill(.white).frame(width: 10).position(x: 92, y: 51)
+        }
         GrownUpFace(mood: mood, gap: 14, size: 7, phase: 1.7, brows: .black.opacity(0.75)).position(x: 85, y: 52)
         if outfit == .uncle {
             // A big friendly moustache and glasses on his forehead
@@ -457,63 +485,6 @@ struct DungeonWall: View {
             }
         }
         .frame(width: width, height: 700, alignment: .topLeading)
-    }
-}
-
-/// A rock with glowing orbs in it. `left` is how many orbs are still inside (0 = mined out).
-struct OrbRockView: View {
-    let left: Int
-    let color: Color
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 26).fill(Color(white: 0.34)).frame(width: 110, height: 76)
-            RoundedRectangle(cornerRadius: 20).fill(Color(white: 0.42)).frame(width: 70, height: 50).offset(x: -18, y: -30)
-            ForEach(0..<max(left, 0), id: \.self) { i in
-                Circle().fill(RadialGradient(colors: [.white, color], center: .center, startRadius: 1, endRadius: 12))
-                    .frame(width: 22)
-                    .shadow(color: color, radius: 8)
-                    .offset(x: CGFloat(i - 1) * 30, y: -24 - CGFloat(i % 2) * 22)
-            }
-        }
-        .frame(width: 120, height: 110, alignment: .bottom)
-        .opacity(left > 0 ? 1 : 0.55)
-    }
-}
-
-struct OrbShopView: View {
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Rectangle().fill(Color(red: 0.42, green: 0.26, blue: 0.16)).frame(width: 220, height: 110)
-            HStack(spacing: 0) {
-                ForEach(0..<5, id: \.self) { i in
-                    Rectangle().fill(i % 2 == 0 ? Color.purple : Color.white).frame(width: 48, height: 40)
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .offset(y: -190)
-            Rectangle().fill(Color(white: 0.25)).frame(width: 8, height: 200).offset(x: -110)
-            Rectangle().fill(Color(white: 0.25)).frame(width: 8, height: 200).offset(x: 110)
-            Text("ORB SHOP").font(.game(20, .heavy)).foregroundStyle(Palette.gold).offset(y: -70)
-            PersonView(outfit: .worker(1)).scaleEffect(0.62, anchor: .bottom).offset(y: -100)
-        }
-        .frame(width: 250, height: 250, alignment: .bottom)
-    }
-}
-
-struct QuestBoardView: View {
-    let done: Bool
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Rectangle().fill(Color(red: 0.40, green: 0.28, blue: 0.18)).frame(width: 10, height: 190).offset(x: -50)
-            Rectangle().fill(Color(red: 0.40, green: 0.28, blue: 0.18)).frame(width: 10, height: 190).offset(x: 50)
-            RoundedRectangle(cornerRadius: 8).fill(Color(red: 0.55, green: 0.40, blue: 0.26)).frame(width: 150, height: 120).offset(y: -70)
-            RoundedRectangle(cornerRadius: 3).fill(Color(red: 1, green: 0.96, blue: 0.82)).frame(width: 90, height: 80).rotationEffect(.degrees(-4)).offset(y: -88)
-            Image(systemName: done ? "checkmark.seal.fill" : "exclamationmark").font(.system(size: 38, weight: .heavy))
-                .foregroundStyle(done ? .green : .red).offset(y: -106)
-        }
-        .frame(width: 160, height: 200, alignment: .bottom)
     }
 }
 

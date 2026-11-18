@@ -770,11 +770,11 @@ final class StreetModel {
             engine.say(snacks > 0 ? "I've got snacks. Back out the door while Mom's back is turned!"
                                   : "The fridge is on the far side. Go when Mom is cooking, and crouch under a table when she walks.")
         case .lobby:
-            engine.say(Settings.shared.practice ? "Take the elevator to floor \(uncleFloor). Uncle is in room \(uncleRoom)."
+            engine.say(Settings.shared.practiceOn ? "Take the elevator to floor \(uncleFloor). Uncle is in room \(uncleRoom)."
                                                 : "Hide behind the plants when a worker looks my way. The elevator is at the far end.")
         case .upstairs:
             // No hints about Uncle's room... except from the Guide in practice mode.
-            if Settings.shared.practice {
+            if Settings.shared.practiceOn {
                 engine.say(currentFloor == uncleFloor ? "The Guide says: this is the floor! Room \(uncleRoom)." : "The Guide says: wrong floor. Uncle is on floor \(uncleFloor).")
             } else {
                 engine.say("Uncle's room could be on any floor. I'll have to knock on doors... quietly.")
@@ -1100,23 +1100,19 @@ enum GuideTips {
     ] }
     static var otherHallway: [String] { [
         "Five of the eight boxes hide a key. Walk to each box and press E.",
-        "You can search a box again and again for accessories and boosts.",
+        "Each box can only be searched once, and it might hold an accessory or a boost.",
         "With all 5 keys, walk to the door at the far right end and press E.",
     ] }
-    static var dungeon: [String] { [
-        "Stand next to a glowing rock and press E to mine an orb. Each rock has 3, and they grow back.",
-        "Spend orbs at the Orb Shop near the entrance (press E at the stall).",
-        "The quest board next to the shop tells you what to do to finish this side level.",
-        "Jump (Space) over the sliding spikes. They take health.",
-    ] }
 
-    /// No Mercy: things the Guide says when he gets it wrong.
+    /// No Mercy: the Guide gets things wrong, and he says them like he means it.
     static let mistakes = [
-        "The key is... under the fridge? No. Wait. Forget I said that.",
-        "Go left! ...No, sorry, my left. Your right. I think.",
-        "Taunting makes you invisible. (It doesn't. I made that up.)",
-        "The code is 0000. It's always 0000. (It is never 0000.)",
-        "Mom is definitely asleep. Probably. Maybe go check?",
-        "This box is safe. I'm almost fairly nearly sure.",
+        "The key is under the fridge. Go and look!",
+        "Go left. The door's definitely on the left.",
+        "Taunt as much as you like: it makes you invisible.",
+        "The code is 0000. It's always 0000.",
+        "Mom is fast asleep. Walk right past her.",
+        "That box is safe. Search it.",
+        "Jump onto the chairs: they're quieter than the floor.",
+        "Dad never checks the closets, so stand in front of one instead.",
     ]
 }

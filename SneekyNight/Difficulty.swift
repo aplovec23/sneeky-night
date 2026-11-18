@@ -43,12 +43,13 @@ enum Difficulty: Int, CaseIterable, Identifiable {
                      "10 taunts to wake Mom; Dad laughs for a whole minute"]
         case .mild: ["The game as it has always been", "The main difficulty"]
         case .hard: ["Hazards are faster and hurt more", "More to collect: 50 dogs, 20 hotel floors, more chores",
-                     "A slightly shorter clock", "Boosts and orbs turn up more often"]
-        case .chaos: ["Everything in Hard, but worse", "Mom and Dad are as fast as you",
+                     "A slightly shorter clock", "Boosts and moonlights turn up more often"]
+        case .chaos: ["Everything in Hard, but worse", "Mom and Dad move at 75% of your speed",
                       "Hiding never works: they always find you", "Hotel workers check hiding places"]
         case .noMercy: ["Everything in Chaos, plus:", "A very short clock, and Mom outruns you",
-                        "Boxes and drawers can turn out to be traps (50-50)", "Strangers come after you",
-                        "Even the Guide gets things wrong"]
+                        "Hurts much more; water puddles in Levels 2–3", "Boxes and drawers can turn out to be traps (50-50)",
+                        "Strangers come after you", "The Guide really gets things wrong, and can get hurt",
+                        "No practice mode until you win the level"]
         }
     }
 
@@ -84,7 +85,7 @@ enum Difficulty: Int, CaseIterable, Identifiable {
         case .easy, .mild: 1
         case .hard: 1.5
         case .chaos: 2
-        case .noMercy: 2.5
+        case .noMercy: 3.5
         }
     }
     var playerSpeed: CGFloat { self == .easy ? 1.15 : 1 }
@@ -105,6 +106,16 @@ enum Difficulty: Int, CaseIterable, Identifiable {
         case .noMercy: 3
         }
     }
+    /// Moonlights for winning a level are multiplied by this.
+    var moonlightScale: Double {
+        switch self {
+        case .easy: 0.5
+        case .mild: 1
+        case .hard: 1.5
+        case .chaos: 2
+        case .noMercy: 3
+        }
+    }
     /// Orbs from each hit in the dungeon are multiplied by this.
     var orbScale: Int {
         switch self {
@@ -118,7 +129,8 @@ enum Difficulty: Int, CaseIterable, Identifiable {
     /// How fast a grown-up chases, given their usual speed and how fast you're going right now.
     func chaserSpeed(base: CGFloat, yours: CGFloat) -> CGFloat {
         switch self {
-        case .chaos: max(base, yours)
+        // Chaos: always 75% of your speed.
+        case .chaos: yours * 0.75
         case .noMercy: max(base, yours * 1.12)
         default: base
         }
@@ -149,7 +161,8 @@ struct DifficultyView: View {
                         card(mode)
                     }
                 }
-                Text("The harder the mode, the more often boosts turn up and the more orbs each rock gives in the dungeon.")
+                Text("Modes open one story level at a time: win a level on Mild to open Hard for it, Hard to open Chaos, and Chaos (with 1000 moonlights and 35 badges) to open No Mercy. Side levels are open on every mode. The harder the mode, the more boosts and moonlights.")
+                    .fixedSize(horizontal: false, vertical: true)
                     .font(.game(17, .semibold))
                     .foregroundStyle(Palette.gold)
                 Spacer()
@@ -196,5 +209,54 @@ struct DifficultyView: View {
             .scaleEffect(on ? 1.03 : 1)
         }
         .buttonStyle(PressableStyle())
+    }
+}
+
+/// Shown instead of a story level when the chosen difficulty isn't open for it yet:
+/// what it still needs, and a button to play on the hardest mode you've unlocked.
+struct ModeLockedView: View {
+    @Environment(GameState.self) private var game
+    let level: Int
+    let onBack: () -> Void
+
+    var body: some View {
+        let mode = Difficulty.current
+        let fallback = game.playableMode(mode, level: level)
+        ZStack {
+            NightSky()
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "lock.fill")
+                    Text("\(mode.name) is locked for Level \(level)")
+                }
+                .font(.game(36, .heavy))
+                .foregroundStyle(.white)
+                Text("Each mode opens one level at a time. Win a level on Mild to open Hard for it, on Hard to open Chaos, and on Chaos to open No Mercy. Side levels are open on every mode.")
+                    .font(.game(19, .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(game.modeNeeds(mode, level: level), id: \.text) { need in
+                    HStack(spacing: 10) {
+                        Image(systemName: need.met ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(need.met ? .green : .white.opacity(0.5))
+                        Text(need.text)
+                    }
+                    .font(.game(22, .semibold))
+                    .foregroundStyle(.white)
+                }
+                HStack(spacing: 14) {
+                    BigButton(title: "Back", color: .gray, action: onBack)
+                    BigButton(title: "Play on \(fallback.name)", symbol: fallback.symbol, color: fallback.color) {
+                        Settings.shared.difficulty = fallback.rawValue
+                    }
+                }
+                .scaleEffect(0.85, anchor: .leading)
+                .padding(.top, 6)
+            }
+            .padding(30)
+            .frame(width: 720, alignment: .leading)
+            .background(Color(red: 0.12, green: 0.10, blue: 0.28), in: RoundedRectangle(cornerRadius: 30))
+            .overlay(RoundedRectangle(cornerRadius: 30).stroke(mode.color.opacity(0.8), lineWidth: 3))
+        }
     }
 }

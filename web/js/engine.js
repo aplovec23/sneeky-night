@@ -45,15 +45,15 @@ SN.Engine = class {
     this.walkSpeed = 290;
     this._dashTime = 0; this._dashDir = { x: 1, y: 0 }; this._dashCooldown = 0; this._input = { x: 0, y: 0 };
     this._tauntTime = 0; this._grace = 0; this._tooLoudSent = false; this._stepClock = 0; this._lastWhole = 1e9;
-    this._hurtTime = 0; this._tested = new Set();
+    this._hurtTime = 0; this._tested = new Set(); this._inPuddle = false;
     const nop = () => {};
     Object.assign(this, { onInteract: nop, onHazard: nop, onTimeUp: nop, onConfirm: nop, onTooLoud: nop, onShieldUsed: nop,
-                          onDefaultInteract: nop, onTaunt: nop, onItemKey: nop, onTick: nop, onKO: nop, onPause: nop, onMenuKey: nop });
+                          onDefaultInteract: nop, onTaunt: nop, onPuddle: nop, onItemKey: nop, onTick: nop, onKO: nop, onPause: nop, onMenuKey: nop });
   }
 
   get concealed() { return this.hidden || this.coverY !== null; }
   /// Practice mode: nobody can catch or hurt you.
-  get safe() { return SN.settings.practice; }
+  get safe() { return SN.settings.practiceOn(); }
   /// How fast you're able to go right now (running counts).
   get pace() { return this.walkSpeed * (this.sprinting ? 1.5 : 1); }
 
@@ -94,7 +94,13 @@ SN.Engine = class {
   // ---------- Actions (keyboard or on-screen buttons) ----------
   interact() {
     if (!this.running || this.frozen) return;
-    if (this.nearest !== null) { if (!this.springsTrap(this.nearest)) this.onInteract(this.nearest); }
+    if (this.nearest !== null) {
+      if (this.springsTrap(this.nearest)) return;
+      const th = this.things[this.nearest];
+      this.onInteract(this.nearest);
+      // Boxes (and drawers) can only be searched once: after that there's nothing to press.
+      if (th && th.open && ['box', 'drawer', 'dresser', 'nightstand'].includes(th.kind)) th.prompt = null;
+    }
     else if (this.defaultPrompt && !this.hidden) this.onDefaultInteract();
   }
 
@@ -242,6 +248,13 @@ SN.Engine = class {
     this.walkSpeed = speed;
     if (this.ducking) speed *= 0.5; else if (run) speed *= 1.5;
     if (this._dashTime > 0) { v = this._dashDir; speed = 1050; }
+    // No Mercy water puddles: wading slows you right down, and the first splash is heard.
+    const wading = this.z < 10 && !this.flying && this.things.some(t => t.kind === 'puddle' && !t.hidden && SN.covers(t, this.player.x, this.player.y));
+    if (wading) {
+      speed *= 0.4;
+      if (!this._inPuddle) { SN.sound.play('water'); this.addNoise(25); this.onPuddle(); }
+    }
+    this._inPuddle = wading;
 
     const stuck = this._blocked(this.player.x, this.player.y);
     let px = this.player.x, py = this.player.y;

@@ -108,6 +108,12 @@ struct LevelScaffold<World: View, Extra: View>: View {
                             PopupView(popup: popup).id(popup.id).transition(.opacity)
                         }
                         extra()
+                        if let belt, belt.phoneOpen {
+                            PhoneView(onClose: {
+                                belt.phoneOpen = false
+                                engine.paused = false
+                            })
+                        }
                         if adminOpen {
                             AdminPanel(context: AdminContext(engine: engine, chase: chase, belt: belt, restart: onRestart,
                                                              confetti: { confetti += 1 }),
@@ -164,7 +170,8 @@ struct LevelScaffold<World: View, Extra: View>: View {
     }
 
     private func setPause(_ on: Bool) {
-        guard !adminOpen else { return }
+        // Typing a P in the Phone's notes mustn't open the pause menu.
+        guard !adminOpen, belt?.phoneOpen != true else { return }
         pauseOpen = on
         engine.paused = on
         engine.stick = .zero
@@ -211,7 +218,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 10) {
                     backpack
-                    if Settings.shared.practice {
+                    if Settings.shared.practiceOn {
                         GuideCard(tips: guideTips, onHint: onHint)
                     }
                 }
@@ -586,7 +593,7 @@ struct PlayerSprite: View {
                 CharacterView(look: look, facingRight: engine.facingRight,
                               walking: engine.walking && engine.z == 0,
                               crouching: engine.crouching || engine.ducking, taunting: engine.taunting,
-                              expression: mood)
+                              expression: mood, facing: engine.facing)
                     .overlay(alignment: .top) {
                         // The creative crown: only while creative mode is on.
                         if engine.creative { CreativeCrown().offset(y: -34) }

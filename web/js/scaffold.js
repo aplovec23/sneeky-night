@@ -194,7 +194,7 @@ SN.LevelRunner = class {
     const el = SN.el(`
       <div class="overlay"><div class="popup" style="text-align:left;max-width:640px">
         <h2 style="text-align:center">⏸ Paused</h2><p style="text-align:center;margin:-4px 0 12px;opacity:.8">${SN.esc(this.level.title())}</p>
-        <label class="set"><input type="checkbox" data-s="practice" ${s.practice ? 'checked' : ''}> Practice mode: Mom and Dad can't catch you</label>
+        <label class="set" ${s.practiceLocked ? 'style="opacity:.5"' : ''}><input type="checkbox" data-s="practice" ${s.practiceOn() ? 'checked' : ''} ${s.practiceLocked ? 'disabled' : ''}> ${s.practiceLocked ? 'Practice mode: locked on No Mercy until you win this level' : "Practice mode: Mom and Dad can't catch you"}</label>
         <label class="set">🔊 Master <input type="range" min="0" max="1" step="0.05" data-s="master" value="${s.master}"></label>
         <label class="set">🎵 Music <input type="range" min="0" max="1" step="0.05" data-s="music" value="${s.music}"></label>
         <label class="set">🔔 Effects <input type="range" min="0" max="1" step="0.05" data-s="effects" value="${s.effects}"></label>

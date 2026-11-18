@@ -13,6 +13,22 @@ struct CustomItem: Codable, Identifiable, Equatable {
     var text = ""
     /// For boxes: a key is hidden inside.
     var hasKey = false
+    /// For things that move (toy cars, spikes, strangers, guards, workers, Dad): how far they walk
+    /// to the left and to the right of where they're placed. Nil: the usual distance for that thing.
+    var pathLeft: Double?
+    var pathRight: Double?
+
+    /// Kinds that walk or roll back and forth, and how far they go if you don't change it.
+    static let usualPath: [String: Double] = ["car": 220, "spikes": 240, "stranger": 240, "guard": 300, "worker": 300, "dad": 230]
+    var moves: Bool { Self.usualPath[kind] != nil }
+    var left: Double { pathLeft ?? Self.usualPath[kind] ?? 0 }
+    var right: Double { pathRight ?? Self.usualPath[kind] ?? 0 }
+
+    /// The stretch of floor it walks along, kept inside the level.
+    func path(width: Double) -> ClosedRange<CGFloat> {
+        let lo = max(60, x - left), hi = min(width - 60, x + right)
+        return CGFloat(min(lo, hi))...CGFloat(max(lo, hi))
+    }
 }
 
 /// A level made in the Level Maker. Saved on the device and shared by every save file.
@@ -31,9 +47,19 @@ struct CustomLevel: Codable, Identifiable, Equatable {
     var creative: Bool?
     /// Dreams only: the number their background is generated from (`DreamBackdrop`).
     var dreamSeed: Int?
+    /// Hazards made in the Hazard Maker for this level (placed as items of kind "custom:<id>").
+    var hazards: [CustomHazard]?
+    /// The room for the "My map" theme.
+    var map: CustomMap?
 
     /// There's no limit any more: place as many objects and hazards as you like, and make the level as long as you like.
-    static let themes = ["Hallway", "Dungeon", "Hotel", "Street"]
+    static let themes = ["Hallway", "Dungeon", "Hotel", "Street", "My map"]
+
+    /// The Hazard Maker hazard behind an item's kind, if it's one.
+    func customHazard(_ kind: String) -> CustomHazard? {
+        guard kind.hasPrefix("custom:") else { return nil }
+        return hazards?.first { $0.kind == kind }
+    }
 
     var hazardCount: Int { items.filter { CustomKind.find($0.kind).group == .hazard }.count }
     var objectCount: Int { items.filter { CustomKind.find($0.kind).group == .object }.count }
@@ -71,8 +97,8 @@ struct CustomKind: Identifiable {
         CustomKind(id: "spikes", name: "Spikes", symbol: "triangle.fill", group: .hazard, onWall: false),
         CustomKind(id: "stranger", name: "Stranger", symbol: "figure.walk", group: .hazard, onWall: false),
         // Instant-fail hazards: one touch and the level is over.
-        CustomKind(id: "lava", name: "Lava (instant)", symbol: "flame.fill", group: .hazard, onWall: false),
-        CustomKind(id: "laser", name: "Laser (instant)", symbol: "bolt.horizontal.fill", group: .hazard, onWall: true),
+        CustomKind(id: "lava", name: "Lava", symbol: "flame.fill", group: .hazard, onWall: false),
+        CustomKind(id: "laser", name: "Laser", symbol: "bolt.horizontal.fill", group: .hazard, onWall: true),
         CustomKind(id: "mom", name: "Mom", symbol: "figure.dress.line.vertical.figure", group: .character, onWall: true, single: true),
         CustomKind(id: "dad", name: "Dad", symbol: "mustache.fill", group: .character, onWall: false, single: true),
         CustomKind(id: "brother", name: "Brother", symbol: "figure.child", group: .character, onWall: false, single: true),
@@ -90,7 +116,10 @@ struct CustomKind: Identifiable {
     /// Characters who walk up and down and send you back to the start if they see you.
     static let watchers: Set<String> = ["guard", "worker"]
 
-    static func find(_ id: String) -> CustomKind { all.first { $0.id == id } ?? all[3] }
+    static func find(_ id: String) -> CustomKind {
+        if id.hasPrefix("custom:") { return CustomKind(id: id, name: "My hazard", symbol: "wand.and.rays", group: .hazard, onWall: false) }
+        return all.first { $0.id == id } ?? all[3]
+    }
 
     static func defaultLine(_ id: String) -> String {
         switch id {
@@ -139,6 +168,8 @@ struct CustomItemArt: View {
     let kind: String
     var open = false
     var hiding = false
+    /// For a hazard from the Hazard Maker.
+    var custom: CustomHazard?
 
     var body: some View {
         switch kind {
@@ -167,7 +198,7 @@ struct CustomItemArt: View {
         case "spikes": SpikeTrapView()
         case "stranger": PersonView(outfit: .stranger(1))
         case "lava": LavaPoolView()
-        case "laser": LaserBeamView(on: !open).offset(y: 150)
+        case "laser": LaserBeamView(on: !open).scaleEffect(0.6, anchor: .bottom)
         case "mom": MomView(stunned: false, walking: false)
         case "dad": DadView(stunned: false, walking: false, laughing: false)
         case "brother": CharacterView(look: SiblingBuddy.look, facingRight: false, expression: .happy).scaleEffect(0.78, anchor: .bottom)
@@ -177,7 +208,8 @@ struct CustomItemArt: View {
         case "guide": GuideView()
         case "guard": PersonView(outfit: .guardian)
         case "worker": PersonView(outfit: .worker(0))
-        default: EmptyView()
+        default:
+            if let custom { CustomHazardArt(hazard: custom) }
         }
     }
 }
@@ -223,9 +255,12 @@ struct GhostView: View {
 struct CustomBackdrop: View {
     let theme: Int
     let width: CGFloat
+    /// Theme 4, "My map".
+    var map: CustomMap?
 
     var body: some View {
         switch theme {
+        case 4: CustomMapBackdrop(map: map ?? CustomMap(), width: width)
         case 1: DungeonWall(width: width)
         case 2: LobbyWall(width: width)
         case 3: StreetScene(width: max(width, 1200))
@@ -275,7 +310,7 @@ struct LevelMakerListView: View {
                                 Image(systemName: "hammer.fill").font(.system(size: 28)).foregroundStyle(Palette.gold)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(level.name).font(.game(26, .heavy))
-                                    Text("\(CustomLevel.themes[level.theme % 4]) · \(level.objectCount) objects · \(level.hazardCount) hazards · \(level.keyCount) keys · \(Int(level.seconds)) s")
+                                    Text("\(CustomLevel.themes[level.theme % CustomLevel.themes.count]) · \(level.objectCount) objects · \(level.hazardCount) hazards · \(level.keyCount) keys · \(Int(level.seconds)) s")
                                         .font(.game(16, .medium)).opacity(0.75)
                                 }
                                 Spacer()
@@ -331,6 +366,10 @@ struct LevelEditorView: View {
     @State private var touching = false
     @State private var grabbed: UUID?
     @State private var hadSelection = false
+    /// The Hazard Maker is open on this hazard (new or being edited).
+    @State private var hazardEdit: CustomHazard?
+    /// The map editor is open.
+    @State private var mapOpen = false
 
     private static let scale: CGFloat = 0.6
     private static let top: CGFloat = 80
@@ -355,8 +394,33 @@ struct LevelEditorView: View {
                 Spacer(minLength: 0)
             }
             .padding(20)
+            if let hazard = hazardEdit {
+                let existing = level.hazards?.contains { $0.id == hazard.id } == true
+                HazardMakerView(hazard: hazard, onSave: { made in
+                    var list = level.hazards ?? []
+                    if let i = list.firstIndex(where: { $0.id == made.id }) { list[i] = made } else { list.append(made) }
+                    level.hazards = list
+                    tool = made.kind
+                    hazardEdit = nil
+                    note = "\(made.name) is ready: tap the room to place it."
+                }, onDelete: existing ? {
+                    level.hazards?.removeAll { $0.id == hazard.id }
+                    level.items.removeAll { $0.kind == hazard.kind }
+                    selected = nil
+                    if tool == hazard.kind { tool = "box" }
+                    hazardEdit = nil
+                } : nil, onCancel: { hazardEdit = nil })
+            }
+            if mapOpen {
+                MapMakerView(map: level.map ?? CustomMap(), onSave: { map in
+                    level.map = map
+                    level.theme = 4
+                    mapOpen = false
+                }, onCancel: { mapOpen = false })
+            }
         }
-        .onAppear { level = CustomStore.find(levelID) ?? CustomLevel(id: levelID) }
+        .onAppear { level = CustomStore.find(levelID) ?? CustomLevel(id: levelID)
+        }
         .onChange(of: level) { _, new in CustomStore.save(new) }
     }
 
@@ -368,7 +432,7 @@ struct LevelEditorView: View {
                 .font(.game(22))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .frame(width: 230)
+                .frame(width: 180)
                 .background(.white, in: RoundedRectangle(cornerRadius: 12))
             stepper("Length", "\(Int(level.width))") { change in
                 level.width = max(1000, level.width + Double(change) * 500)
@@ -380,19 +444,32 @@ struct LevelEditorView: View {
             Button {
                 SoundPlayer.shared.tap()
                 level.theme = (level.theme + 1) % CustomLevel.themes.count
+                if level.theme == 4 && level.map == nil { level.map = CustomMap() }
             } label: {
-                Label(CustomLevel.themes[level.theme % 4], systemImage: "paintbrush.fill")
-                    .font(.game(17)).foregroundStyle(.white)
+                Label(CustomLevel.themes[level.theme % CustomLevel.themes.count], systemImage: "paintbrush.fill")
+                    .font(.game(17)).foregroundStyle(.white).lineLimit(1).fixedSize()
                     .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(.white.opacity(0.15), in: Capsule())
             }
             .buttonStyle(PressableStyle())
+            if level.theme == 4 {
+                Button {
+                    SoundPlayer.shared.tap()
+                    mapOpen = true
+                } label: {
+                    Label("Map", systemImage: "map.fill")
+                        .font(.game(17)).foregroundStyle(.white).lineLimit(1).fixedSize()
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Color.purple.opacity(0.7), in: Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
             Button {
                 SoundPlayer.shared.tap()
                 level.creative = !(level.creative ?? false)
             } label: {
-                Label(level.creative == true ? "Creative: on" : "Creative: off", systemImage: "wand.and.stars")
-                    .font(.game(17)).foregroundStyle(level.creative == true ? .black : .white)
+                Label(level.creative == true ? "Creative on" : "Creative off", systemImage: "wand.and.stars")
+                    .font(.game(17)).foregroundStyle(level.creative == true ? .black : .white).lineLimit(1).fixedSize()
                     .padding(.horizontal, 14).padding(.vertical, 8)
                     .background(level.creative == true ? AnyShapeStyle(Palette.gold) : AnyShapeStyle(.white.opacity(0.15)), in: Capsule())
             }
@@ -402,6 +479,8 @@ struct LevelEditorView: View {
                 Text("Objects \(level.objectCount)")
                 Text("Hazards \(level.hazardCount)")
             }
+            .lineLimit(1)
+            .fixedSize()
             .font(.game(14, .heavy))
             .foregroundStyle(.white.opacity(0.85))
             Button {
@@ -445,9 +524,23 @@ struct LevelEditorView: View {
             let furthest = max(0, level.width * k - geo.size.width)
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
-                    CustomBackdrop(theme: level.theme, width: level.width)
+                    CustomBackdrop(theme: level.theme, width: level.width, map: level.map)
+                    // The path each moving thing walks along: a dotted line with a dot at each end.
+                    ForEach(level.items.filter(\.moves)) { item in
+                        let path = item.path(width: level.width)
+                        let picked = item.id == selected
+                        Path { p in
+                            p.move(to: CGPoint(x: path.lowerBound, y: item.y + 10))
+                            p.addLine(to: CGPoint(x: path.upperBound, y: item.y + 10))
+                        }
+                        .stroke(picked ? Color.yellow : .white.opacity(0.55), style: StrokeStyle(lineWidth: picked ? 6 : 4, dash: [14, 10]))
+                        ForEach([path.lowerBound, path.upperBound], id: \.self) { end in
+                            Circle().fill(picked ? Color.yellow : .white.opacity(0.7)).frame(width: picked ? 22 : 16)
+                                .position(x: end, y: item.y + 10)
+                        }
+                    }
                     ForEach(level.items.sorted { $0.y < $1.y }) { item in
-                        CustomItemArt(kind: item.kind)
+                        CustomItemArt(kind: item.kind, custom: level.customHazard(item.kind))
                             .overlay(alignment: .top) {
                                 if item.kind == "box" && item.hasKey {
                                     Image(systemName: "key.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(Palette.gold).offset(y: -26)
@@ -510,7 +603,7 @@ struct LevelEditorView: View {
     private func hit(_ at: CGPoint) -> CustomItem? {
         level.items.reversed().first { item in
             let kind = CustomKind.find(item.kind)
-            let tall: Double = kind.onWall || kind.group == .character || item.kind == "stranger" ? 260 : 90
+            let tall: Double = level.customHazard(item.kind)?.height ?? (kind.onWall || kind.group == .character || item.kind == "stranger" ? 260 : 90)
             return abs(item.x - at.x) < 60 && at.y < item.y + 16 && at.y > item.y - tall
         }
     }
@@ -539,6 +632,41 @@ struct LevelEditorView: View {
 
     private var palette: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Hazards you made yourself, and the Hazard Maker.
+            HStack(spacing: 8) {
+                Text("My hazards").font(.game(14, .heavy)).foregroundStyle(.white.opacity(0.75))
+                Button {
+                    SoundPlayer.shared.tap()
+                    hazardEdit = CustomHazard(name: "My hazard \((level.hazards?.count ?? 0) + 1)")
+                } label: {
+                    Label("New hazard", systemImage: "plus").font(.game(14, .heavy)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(Palette.button.opacity(0.85), in: Capsule())
+                }
+                .buttonStyle(PressableStyle())
+                ScrollView(.horizontal) {
+                    HStack(spacing: 6) {
+                        ForEach(level.hazards ?? []) { hazard in
+                            Button {
+                                SoundPlayer.shared.tap()
+                                tool = hazard.kind
+                                note = "Tap the room to place: \(hazard.name). (Tap a placed one to edit it.)"
+                            } label: {
+                                HStack(spacing: 5) {
+                                    CustomHazardArt(hazard: hazard).scaleEffect(0.3).frame(width: 30, height: 28)
+                                    Text(hazard.name).font(.game(12, .heavy)).lineLimit(1)
+                                }
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8).frame(height: 34)
+                                .background(Color.red.opacity(tool == hazard.kind ? 0.95 : 0.4), in: Capsule())
+                                .overlay(Capsule().stroke(tool == hazard.kind ? Color.yellow : .clear, lineWidth: 3))
+                            }
+                            .buttonStyle(PressableStyle())
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 8)], alignment: .leading, spacing: 8) {
                 ForEach(CustomKind.all) { kind in
                     Button {
@@ -559,18 +687,50 @@ struct LevelEditorView: View {
                     .buttonStyle(PressableStyle())
                 }
             }
-            Text("Teal = objects   ·   Red = hazards   ·   Purple = characters (tap them after placing to write what they say). Uncle, Friend, Ghost, the Guide, Guard and Worker are Level Maker only!")
+            Text("Teal = objects   ·   Red = hazards (lava is instant; lasers take half your health, crouch under them)   ·   Purple = characters (tap them after placing to write what they say). Uncle, Friend, Ghost, the Guide, Guard and Worker are Level Maker only!")
                 .font(.game(13, .semibold))
                 .foregroundStyle(.white.opacity(0.6))
         }
+    }
+
+    /// How far a moving thing walks to each side. 0 on both: it stays put.
+    private func pathControl(_ i: Int) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath").foregroundStyle(.yellow)
+            Text("Path").font(.game(15, .heavy)).foregroundStyle(.white)
+            Text("◀").font(.game(13)).foregroundStyle(.white.opacity(0.7))
+            // Flipped, so dragging it to the left makes the path go further left.
+            Slider(value: Binding(get: { level.items[i].left }, set: { level.items[i].pathLeft = $0.rounded() }), in: 0...900)
+                .frame(width: 110).tint(.yellow)
+                .scaleEffect(x: -1, y: 1)
+            Slider(value: Binding(get: { level.items[i].right }, set: { level.items[i].pathRight = $0.rounded() }), in: 0...900)
+                .frame(width: 110).tint(.yellow)
+            Text("▶").font(.game(13)).foregroundStyle(.white.opacity(0.7))
+        }
+        .fixedSize()
     }
 
     private func inspector(_ i: Int) -> some View {
         let item = level.items[i]
         let kind = CustomKind.find(item.kind)
         return HStack(spacing: 12) {
-            Label(kind.name, systemImage: kind.symbol).font(.game(22, .heavy)).foregroundStyle(.white)
-            Text("Drag it to move.").font(.game(15, .semibold)).foregroundStyle(.white.opacity(0.7))
+            Label(level.customHazard(item.kind)?.name ?? kind.name, systemImage: kind.symbol).font(.game(22, .heavy)).foregroundStyle(.white)
+            if !item.moves || kind.group != .character {
+                Text(item.moves ? "Drag it to move; slide its path." : "Drag it to move.").font(.game(15, .semibold)).foregroundStyle(.white.opacity(0.7))
+            }
+            if let hazard = level.customHazard(item.kind) {
+                Button {
+                    SoundPlayer.shared.tap()
+                    hazardEdit = hazard
+                } label: {
+                    Label("Edit hazard", systemImage: "slider.horizontal.3").font(.game(17)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 8).background(Color.purple.opacity(0.75), in: Capsule())
+                }
+                .buttonStyle(PressableStyle())
+            }
+            if item.moves {
+                pathControl(i)
+            }
             if item.kind == "box" {
                 Toggle("Key inside", isOn: $level.items[i].hasKey)
                     .font(.game(18)).foregroundStyle(.white).tint(Palette.button).frame(width: 190)
@@ -636,6 +796,8 @@ final class CustomLevelModel {
     var lasersOn = true
     @ObservationIgnored private var laserClock = 0.0
     var dadX: CGFloat = 0
+    /// Where Dad walks up and down (from the Level Maker's path for him).
+    @ObservationIgnored var dadPath: ClosedRange<CGFloat> = 0...0
     var dadRight = true
     var dadHere = false
     /// Someone you talked to is saying their line: where they stand, and what they say.
@@ -661,6 +823,8 @@ final class CustomLevelModel {
     @ObservationIgnored var winMessage: String?
     @ObservationIgnored var onEdit: () -> Void = {}
     @ObservationIgnored private var keyBoxes: Set<String> = []
+    /// After touching a Hazard Maker hazard, a moment before the next touch counts.
+    @ObservationIgnored private var customCooldown = 0.0
     @ObservationIgnored private var dadHome: CGPoint = .zero
     @ObservationIgnored private var talkTime = 0.0
     @ObservationIgnored private var bannerTime = 0.0
@@ -707,7 +871,7 @@ final class CustomLevelModel {
             strangers = []
             watchers = []
             lasers = []
-            engine.things.removeAll { $0.kind == "lava" }
+            engine.things.removeAll { $0.kind == "lava" || $0.kind.hasPrefix("custom:") }
         }
         chase.engine = engine
         chase.entrance = { [weak self] _ in
@@ -779,7 +943,8 @@ final class CustomLevelModel {
             case "cans": things.append(Thing(id: id, kind: "cans", pos: pos, footprint: CGSize(width: 60, height: 24), hazard: .cans))
             case "car":
                 var car = Thing(id: id, kind: "car", pos: pos, footprint: CGSize(width: 60, height: 26), hazard: .toy)
-                car.patrol = max(60, pos.x - 220)...min(level.width - 60, pos.x + 220)
+                car.patrol = item.path(width: level.width)
+                if car.patrol!.upperBound - car.patrol!.lowerBound < 4 { car.patrol = nil }
                 car.speed = 220 * hardness
                 things.append(car)
             case "lava":
@@ -787,11 +952,16 @@ final class CustomLevelModel {
             case "laser": lasers.append(pos.x)
             case "spikes", "stranger":
                 strangers.append(Walker(id: n, kind: item.kind == "spikes" ? .rat : .stranger, pos: pos,
-                                        range: max(60, pos.x - 240)...min(level.width - 60, pos.x + 240),
+                                        range: item.path(width: level.width),
                                         speed: (item.kind == "spikes" ? 170 : 110) * hardness, style: n))
+            case let kind where kind.hasPrefix("custom:"):
+                // A hazard from the Hazard Maker: its hitbox lies on the floor; touching it is handled in `tick`.
+                if let hazard = level.customHazard(kind) {
+                    things.append(Thing(id: id, kind: kind, pos: pos, footprint: CGSize(width: hazard.width, height: hazard.depth), flat: true))
+                }
             case "guard", "worker":
                 watchers.append(Walker(id: n, kind: item.kind == "guard" ? .guardian : .worker, pos: pos,
-                                       range: max(60, pos.x - 300)...min(level.width - 60, pos.x + 300),
+                                       range: item.path(width: level.width),
                                        speed: (item.kind == "guard" ? 115 : 100) * hardness, style: n))
                 watcherLines[n] = line(of: item)
             default: break
@@ -799,7 +969,8 @@ final class CustomLevelModel {
         }
         start = item("start").map { CGPoint(x: $0.x, y: $0.y) } ?? CGPoint(x: 200, y: 620)
         engine.load(SceneLayout(width: level.width, floor: Self.floor, things: things, spawn: start))
-        engine.usesHP = !strangers.isEmpty || watchers.contains { $0.kind == .guardian }
+        engine.usesHP = !strangers.isEmpty || !lasers.isEmpty || watchers.contains { $0.kind == .guardian }
+            || level.items.contains { (level.customHazard($0.kind)?.damage ?? 0) > 0 }
         engine.timeLeft = level.seconds
         engine.timerOn = true
         engine.resetNoise()
@@ -818,6 +989,7 @@ final class CustomLevelModel {
         if let dad = item("dad") {
             dadHome = CGPoint(x: dad.x, y: dad.y)
             dadX = dad.x
+            dadPath = dad.path(width: level.width)
             dadHere = true
         } else {
             dadHere = false
@@ -907,7 +1079,8 @@ final class CustomLevelModel {
         let prompt: String? = near.map { $0.kind == "brother" ? "Talk to your brother" : "Talk to \(CustomKind.find($0.kind).name)" }
         if engine.defaultPrompt != prompt { engine.defaultPrompt = prompt }
         walkWatchers(dt)
-        // Instant-fail hazards. Lava: jump over it. Lasers: they blink, so walk through while they're off.
+        // Lava ends the level at once: jump over it. Lasers are a beam at chest height: crouch under it,
+        // or wait for it to blink off. Touching it takes half your health and knocks you back.
         laserClock += dt
         let on = laserClock.truncatingRemainder(dividingBy: 3) < 1.7
         if on != lasersOn { lasersOn = on }
@@ -916,11 +1089,14 @@ final class CustomLevelModel {
                 end("Melted!", "You stepped in the lava. One touch is all it takes!")
                 return
             }
-            if lasersOn, lasers.contains(where: { abs($0 - player.x) < 24 }) {
-                end("Zapped!", "You walked into a laser beam. Wait until it blinks off!")
-                return
+            if lasersOn, !engine.ducking, engine.coverY == nil, let beam = lasers.first(where: { abs($0 - player.x) < 24 }),
+               engine.damage(engine.maxHP * 0.5) {
+                engine.player.x = min(max(player.x + (player.x >= beam ? 90 : -90), 40), engine.width - 40)
+                Sound.buzz.play()
+                engine.say("ZAP! Crouch under the lasers!", seconds: 1.8)
             }
         }
+        touchCustomHazards(dt)
         for i in strangers.indices {
             strangers[i].pos.x += strangers[i].speed * CGFloat(dt) * Difficulty.current.hazardSpeed
             if strangers[i].pos.x >= strangers[i].range.upperBound || strangers[i].pos.x <= strangers[i].range.lowerBound {
@@ -937,13 +1113,35 @@ final class CustomLevelModel {
         // Dad walks up and down near where you put him, and chases you if he sees you.
         if dadHere && !chase.active {
             dadX += (dadRight ? 1 : -1) * 105 * CGFloat(dt)
-            if dadX > min(dadHome.x + 230, level.width - 80) { dadRight = false }
-            if dadX < max(dadHome.x - 230, 80) { dadRight = true }
+            if dadX > min(max(dadPath.upperBound, dadHome.x), level.width - 80) { dadRight = false }
+            if dadX < max(min(dadPath.lowerBound, dadHome.x), 80) { dadRight = true }
             let ahead = (player.x - dadX) * (dadRight ? 1 : -1)
             if ahead > 0, ahead < (engine.ducking ? 110 : 280), abs(player.y - dadHome.y) < 90, !engine.concealed, !engine.safe {
                 dadHere = false
                 chase.alarm(.dad, "Dad: \"\(line("dad"))\"", from: CGPoint(x: dadX, y: dadHome.y))
             }
+        }
+    }
+
+    /// Hazards from the Hazard Maker: jump over them (or crouch past, if they allow it). Touching one
+    /// takes its damage and knocks you back, or, if it does no damage, makes a racket that wakes Mom.
+    private func touchCustomHazards(_ dt: Double) {
+        customCooldown = max(0, customCooldown - dt)
+        guard customCooldown <= 0, engine.z < 14, !engine.hidden, !engine.safe, !engine.godMode else { return }
+        let player = engine.player
+        guard let thing = engine.things.first(where: { $0.kind.hasPrefix("custom:") && !$0.hidden && $0.covers(player) }),
+              let hazard = level.customHazard(thing.kind) else { return }
+        if hazard.crouchSafe && engine.ducking { return }
+        customCooldown = 1.3
+        if hazard.damage > 0 {
+            if engine.damage(engine.maxHP * hazard.damage / 100) {
+                engine.player.x = min(max(player.x + (player.x >= thing.pos.x ? 80 : -80), 40), engine.width - 40)
+                engine.say("Ouch! The \(hazard.name)!", seconds: 1.5)
+            }
+        } else {
+            Sound.lamp.play()
+            customCooldown = 2.5
+            wakeMom("CRASH! You bumped the \(hazard.name).")
         }
     }
 
@@ -1089,7 +1287,7 @@ struct CustomLevelStage: View {
             if dream, let seed = model.level.dreamSeed {
                 DreamBackdrop(seed: seed, width: CGFloat(model.level.width))
             } else {
-                CustomBackdrop(theme: model.level.theme, width: CGFloat(model.level.width))
+                CustomBackdrop(theme: model.level.theme, width: CGFloat(model.level.width), map: model.level.map)
             }
             ForEach(engine.things.filter { !$0.onFloor }) { thing in
                 CustomItemArt(kind: thing.kind, open: model.doorOpen, hiding: model.hidingIn == thing.id)
@@ -1127,7 +1325,7 @@ struct CustomLevelStage: View {
                 .anchored(at: walker.pos)
             }
             FloorLayer(engine: engine, look: game.look, name: game.playerName) { thing in
-                CustomItemArt(kind: thing.kind, open: thing.open)
+                CustomItemArt(kind: thing.kind, open: thing.open, custom: model.level.customHazard(thing.kind))
             }
             ChaserView(chase: model.chase)
             Palette.shade.opacity(0.2 * Palette.shadeAmount)
@@ -1137,31 +1335,86 @@ struct CustomLevelStage: View {
     }
 }
 
-/// A pool of lava for the Level Maker. Touching it ends the level at once.
+/// A pool of lava for the Level Maker: a lumpy puddle in the floor with a dark crust round the
+/// edge, glowing cracks and slow bubbles. Touching it ends the level at once.
 struct LavaPoolView: View {
     var body: some View {
-        ZStack {
-            Ellipse().fill(Color(red: 0.55, green: 0.10, blue: 0.05)).frame(width: 130, height: 44)
-            Ellipse().fill(LinearGradient(colors: [.yellow, .orange, .red], startPoint: .top, endPoint: .bottom)).frame(width: 116, height: 34)
-            Circle().fill(.yellow.opacity(0.9)).frame(width: 12).offset(x: -26, y: -4)
-            Circle().fill(.yellow.opacity(0.8)).frame(width: 8).offset(x: 22, y: 3)
+        TimelineView(.animation(minimumInterval: 1 / 20)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            ZStack {
+                // Heat glow on the floor around it
+                Ellipse().fill(RadialGradient(colors: [.orange.opacity(0.45), .clear], center: .center, startRadius: 30, endRadius: 90))
+                    .frame(width: 180, height: 70)
+                LavaBlob(wobble: 0).fill(Color(red: 0.22, green: 0.10, blue: 0.08)).frame(width: 136, height: 44)
+                LavaBlob(wobble: t).fill(LinearGradient(colors: [Color(red: 1, green: 0.55, blue: 0.10), Color(red: 0.85, green: 0.18, blue: 0.05)],
+                                                        startPoint: .top, endPoint: .bottom))
+                    .frame(width: 118, height: 32)
+                // Dark crust floating on top, cracked with bright lines
+                ForEach(0..<3, id: \.self) { i in
+                    Capsule().fill(Color(red: 0.35, green: 0.12, blue: 0.08).opacity(0.85))
+                        .frame(width: 26 - CGFloat(i) * 4, height: 7)
+                        .offset(x: CGFloat(i * 30 - 30) + CGFloat(sin(t * 0.6 + Double(i))) * 4, y: CGFloat(i % 2) * 6 - 3)
+                }
+                // Bubbles that swell and pop
+                ForEach(0..<3, id: \.self) { i in
+                    let k = (t * 0.8 + Double(i) * 0.37).truncatingRemainder(dividingBy: 1)
+                    Circle().fill(Color.yellow.opacity(0.9 * (1 - k))).frame(width: 4 + CGFloat(k) * 9)
+                        .offset(x: CGFloat(i * 34 - 34), y: -2 - CGFloat(k) * 6)
+                }
+            }
+            .frame(width: 180, height: 70)
         }
-        .shadow(color: .orange, radius: 12)
-        .frame(width: 130, height: 46)
     }
 }
 
-/// A laser from ceiling to floor for the Level Maker. It blinks; touching it while it's on ends the level.
+/// An uneven puddle outline (not a perfect oval), gently rippling as `wobble` changes.
+struct LavaBlob: Shape {
+    var wobble: Double
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let steps = 28
+        for n in 0...steps {
+            let a = Double(n) / Double(steps) * 2 * .pi
+            let lump = 1 + 0.10 * sin(a * 3 + 1) + 0.06 * sin(a * 5 + wobble * 1.3) + 0.04 * cos(a * 7 - wobble)
+            let x = rect.midX + CGFloat(cos(a) * lump) * rect.width / 2
+            let y = rect.midY + CGFloat(sin(a) * lump) * rect.height / 2
+            if n == 0 { p.move(to: CGPoint(x: x, y: y)) } else { p.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// A laser tripwire for the Level Maker: a post at the back of the floor and one at the front, with a
+/// beam between them at chest height. Crouch under it, or wait while it blinks off. Touching it takes
+/// half your health.
 struct LaserBeamView: View {
     let on: Bool
 
     var body: some View {
+        // 40×380, feet of the front post at the bottom. The back post stands 150 further up (by the
+        // wall); the beam runs between the two lamps on top, 112 above each post's foot.
         ZStack(alignment: .bottom) {
-            Rectangle().fill(Color.red.opacity(on ? 0.9 : 0.12)).frame(width: 8, height: 560)
-                .shadow(color: .red, radius: on ? 14 : 0)
-            RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.25)).frame(width: 34, height: 16)
-            RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.25)).frame(width: 34, height: 16).offset(y: -556)
+            post.offset(y: -150)
+            Path { p in
+                p.move(to: CGPoint(x: 20, y: 380 - 150 - 106))
+                p.addLine(to: CGPoint(x: 20, y: 380 - 106))
+            }
+            .stroke(Color.red.opacity(on ? 0.95 : 0.12), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+            .shadow(color: .red, radius: on ? 12 : 0)
+            .frame(width: 40, height: 380)
+            post
         }
-        .frame(width: 40, height: 580, alignment: .bottom)
+        .frame(width: 40, height: 380, alignment: .bottom)
+    }
+
+    private var post: some View {
+        VStack(spacing: 0) {
+            Circle().fill(on ? Color.red : Color(white: 0.4)).frame(width: 12).shadow(color: .red, radius: on ? 6 : 0)
+            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.3)).frame(width: 10, height: 92)
+            RoundedRectangle(cornerRadius: 3).fill(Color(white: 0.22)).frame(width: 26, height: 8)
+        }
+        .frame(width: 40, height: 112, alignment: .bottom)
     }
 }

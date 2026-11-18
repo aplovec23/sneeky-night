@@ -66,7 +66,7 @@
   function go(where) {
     const M = SN.menus;
     switch (where) {
-      case 'title': return showScreen(M.title(game, go));
+      case 'title': SN.settings.practiceLocked = false; return showScreen(M.title(game, go));
       case 'play': return play();
       case 'levels': return showScreen(M.levels(game, go, { onPick: startLevel }));
       case 'customize': return showScreen(M.customize(game, go, { onDone: () => { if (playAfterCustomize) { playAfterCustomize = false; play(); } else go('title'); } }));
@@ -98,6 +98,12 @@
   function startLevel(id) {
     const Level = SN['Level' + id];
     if (!Level) { go('levels'); return; }
+    if (!game.modeUnlocked(SN.difficulty.current, id)) {
+      showScreen(SN.menus.modeLocked(game, id, { onBack: () => go('levels'), onPlay: () => startLevel(id) }));
+      return;
+    }
+    // No Mercy: no practice mode until you've won this level on No Mercy.
+    SN.settings.practiceLocked = SN.difficulty.current === 4 && !(game.beatenOn[id] || []).includes(4);
     skyRunning = false;
     ui.innerHTML = '';
     const onExit = () => go('title');

@@ -94,11 +94,17 @@
 
     // Legs
     if (crouching) {
-      crouchLeg(ctx, 44, 126, 70 - step, 122, 62 - step, 142 - Math.max(0, -step) * 0.6, true, c);
-      crouchLeg(ctx, 52, 126, 80 + step, 121, 72 + step, 142 - Math.max(0, step) * 0.6, false, c);
+      crouchLeg(ctx, 44, 126, 70 - step, 122, 62 - step, 142 - Math.max(0, -step) * 0.6, true, c, look);
+      crouchLeg(ctx, 52, 126, 80 + step, 121, 72 + step, 142 - Math.max(0, step) * 0.6, false, c, look);
     } else {
-      leg(ctx, 42, 102.5, swing * 28, c);
-      leg(ctx, 58, 102.5, -swing * 28, c);
+      leg(ctx, 42, 102.5, swing * 28, c, look);
+      leg(ctx, 58, 102.5, -swing * 28, c, look);
+    }
+    // A skirt flares out over the tops of the legs.
+    if (look.legStyle === 2) {
+      ctx.fillStyle = c.trousers; ctx.beginPath();
+      ctx.moveTo(50 - 13, 100 + drop); ctx.lineTo(50 + 13, 100 + drop); ctx.lineTo(73, 126 + drop); ctx.lineTo(27, 126 + drop);
+      ctx.closePath(); ctx.fill();
     }
 
     // Upper body: leans forward when crouching, bobs while walking.
@@ -119,23 +125,34 @@
     return 0;
   }
 
-  function leg(ctx, px, py, deg, c) {
+  /// Trousers reach the shoe; shorts and skirts show the leg below the knee.
+  function leg(ctx, px, py, deg, c, look) {
+    const style = look.legStyle | 0;
     D.rotated(ctx, px, py, deg, () => {
-      D.capsule(ctx, 0, 20, 17, 40, c.trousers);
-      D.capsule(ctx, 4, 41.5, 24, 11, c.shoe);
+      if (style !== 0) D.capsule(ctx, 0, 20, 14, 40, c.skin);
+      const h = style === 0 ? 40 : style === 1 ? 21 : 12;
+      D.capsule(ctx, 0, h / 2, 17, h, c.trousers);
+      shoe(ctx, 4, 41.5, c, look);
     });
+  }
+  /// Slippers, sneakers (white sole) or boots (taller at the ankle), centred on (x, y).
+  function shoe(ctx, x, y, c, look) {
+    if (look.shoeStyle === 2) D.rrect(ctx, x - 3, y - 8, 15, 15, 4, SN.shade(c.shoe, -0.05));
+    D.capsule(ctx, x, y, 24, 11, c.shoe);
+    if (look.shoeStyle === 1) D.capsule(ctx, x, y + 3.5, 25, 4, '#fff');
   }
   /// A bent leg for crouching: the hip under the body, the knee out in front, the shin going down
   /// to the shoe, which stands on the floor line.
-  function crouchLeg(ctx, hx, hy, kx, ky, fx, fy, far, c) {
+  function crouchLeg(ctx, hx, hy, kx, ky, fx, fy, far, c, look) {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.strokeStyle = far ? SN.shade(c.trousers, -0.08) : c.trousers; ctx.lineWidth = 16;
     ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(kx, ky); ctx.stroke();
-    ctx.strokeStyle = SN.shade(c.trousers, far ? -0.1 : -0.03); ctx.lineWidth = 14;
+    // Shorts and skirts show the leg below the knee.
+    ctx.strokeStyle = SN.shade((look.legStyle | 0) === 0 ? c.trousers : c.skin, far ? -0.1 : -0.03); ctx.lineWidth = 14;
     ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(fx, fy); ctx.stroke();
     ctx.restore();
-    D.capsule(ctx, fx + 5, fy + 2.5, 24, 11, far ? SN.shade(c.shoe, -0.06) : c.shoe);
+    shoe(ctx, fx + 5, fy + 2.5, far ? Object.assign({}, c, { shoe: SN.shade(c.shoe, -0.06) }) : c, look);
   }
 
   // The character is drawn turned a little toward the way they face (facing right; the whole figure
@@ -193,6 +210,8 @@
       if (pattern === 'bolt') D.bolt(ctx, 46, 77, 16, col);
       if (pattern === 'moon') D.moon(ctx, 46, 77, 13, col, c.shirt);
       if (pattern === 'paw') D.paw(ctx, 46, 78, 15, col);
+      const emoji = { flame: '🔥', leaf: '🍃', music: '🎵', smile: '😊', sparkles: '✨' }[pattern];
+      if (emoji) D.text(ctx, emoji, 46, 78, 14, col);
     }
   }
 
@@ -448,6 +467,8 @@
       if (!o.noCurlers) [46, 62, 78, 94].forEach(cx => D.capsule(ctx, cx, 30, 12, 18, '#32ade6'));
       // Her face: cross when she's after you, surprised when stunned.
       grownUpFace(ctx, 70, 68, { mood: o.stunned ? 4 : o.mood ?? (o.calm ? 0 : 7), gap: 22, size: 7, phase: 1.3, t });
+      // Grandma: round glasses.
+      if (o.glasses) { D.circle(ctx, 59, 68, 17, null, SN.white(0.25), 2.5); D.circle(ctx, 81, 68, 17, null, SN.white(0.25), 2.5); D.rect(ctx, 70, 68, 5, 2, SN.white(0.25)); }
       if (o.stunned) stunStars(ctx, 70, 18, t);
       else if (!o.calm) label(ctx, '?!', 120, 22, 30, '#ffcc00');
     });

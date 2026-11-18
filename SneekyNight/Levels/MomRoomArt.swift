@@ -201,6 +201,8 @@ struct DadView: View {
     var laughing = false
     /// His face, like the player's. Laughing always makes him happy.
     var expression: Mood = .calm
+    /// South: facing you. North: his back. East or west: looking that way.
+    var facing: Facing = .south
 
     private let pajamas = Color(red: 0.35, green: 0.45, blue: 0.70)
     private let skin = Color(red: 0.94, green: 0.76, blue: 0.62)
@@ -248,6 +250,26 @@ struct DadView: View {
             Group {
                 Circle().fill(skin).frame(width: 64).offset(y: -66)
                 Circle().trim(from: 0.55, to: 0.95).fill(Color(red: 0.25, green: 0.18, blue: 0.12)).frame(width: 66).offset(y: -70)
+                if facing == .north {
+                    // The back of his head.
+                    Circle().fill(Color(red: 0.25, green: 0.18, blue: 0.12)).frame(width: 60).offset(y: -70)
+                } else {
+                faceParts.offset(x: facing == .east ? 9 : facing == .west ? -9 : 0)
+                }
+            }
+            .offset(y: shake)
+            if stunned {
+                StunStars().offset(y: -116)
+                Image(systemName: "leaf.fill").font(.system(size: 30)).foregroundStyle(.green).offset(y: 30)
+            } else {
+                Text(laughing ? "Ha ha!" : expression == .cross ? "Hey!" : "Hmm?").font(.game(28, .heavy)).foregroundStyle(.yellow).offset(x: 62, y: -118)
+            }
+        }
+    }
+
+    /// Glasses, eyes, mouth and moustache.
+    private var faceParts: some View {
+        ZStack {
                 HStack(spacing: 6) {
                     Circle().stroke(.black, lineWidth: 3).frame(width: 20)
                     Circle().stroke(.black, lineWidth: 3).frame(width: 20)
@@ -258,14 +280,6 @@ struct DadView: View {
                     .offset(y: -66)
                 // His moustache sits over the top of his mouth.
                 Capsule().fill(Color(red: 0.25, green: 0.18, blue: 0.12)).frame(width: 30, height: 8).offset(y: -52)
-            }
-            .offset(y: shake)
-            if stunned {
-                StunStars().offset(y: -116)
-                Image(systemName: "leaf.fill").font(.system(size: 30)).foregroundStyle(.green).offset(y: 30)
-            } else {
-                Text(laughing ? "Ha ha!" : expression == .cross ? "Hey!" : "Hmm?").font(.game(28, .heavy)).foregroundStyle(.yellow).offset(x: 62, y: -118)
-            }
         }
     }
 }

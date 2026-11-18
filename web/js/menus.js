@@ -70,9 +70,11 @@ SN.menus = (function () {
     const shirts = game.extraColors ? SN.look.shirts.length : SN.look.baseShirts;
     section('Top', SN.look.shirtStyles.map((s, i) => chip(s, () => look.shirtStyle === i, () => look.shirtStyle = i)));
     section('Top colour', SN.look.shirts.slice(0, shirts).map((c, i) => swatch(c, () => look.shirt === i, () => look.shirt = i)));
-    section('Picture on the top', SN.look.patterns.map((p, i) => chip({ star: '★', heart: '♥', bolt: '⚡', moon: '☾', paw: '🐾' }[p] || 'None', () => look.pattern === i, () => look.pattern = i)));
-    section('Trousers', [chip('Match top', () => look.pants === -1, () => look.pants = -1)].concat(SN.look.pants.map((c, i) => swatch(c, () => look.pants === i, () => look.pants = i))));
-    section('Shoes', SN.look.shoes.map((c, i) => swatch(c, () => look.shoes === i, () => look.shoes = i)));
+    section('Picture on the top', SN.look.patterns.map((p, i) => chip({ star: '★', heart: '♥', bolt: '⚡', moon: '☾', paw: '🐾', flame: '🔥', leaf: '🍃', music: '🎵', smile: '😊', sparkles: '✨' }[p] || 'None', () => look.pattern === i, () => look.pattern = i)));
+    section('Trousers, shorts or a skirt', SN.look.legStyles.map((s, i) => chip(s, () => (look.legStyle | 0) === i, () => look.legStyle = i)));
+    section('Trouser colour', [chip('Match top', () => look.pants === -1, () => look.pants = -1)].concat(SN.look.pants.map((c, i) => swatch(c, () => look.pants === i, () => look.pants = i))));
+    section('Shoes', SN.look.shoeStyles.map((s, i) => chip(s, () => (look.shoeStyle | 0) === i, () => look.shoeStyle = i)));
+    section('Shoe colour', SN.look.shoes.map((c, i) => swatch(c, () => look.shoes === i, () => look.shoes = i)));
     section('Eyes', SN.look.eyes.map((c, i) => swatch(c, () => look.eyes === i, () => look.eyes = i)));
     section('Usual face', SN.look.moods.map((m, i) => chip(m, () => look.face === i, () => look.face = i)));
     section('Cheeks', [chip('Blush', () => look.blush !== false, () => look.blush = look.blush === false), chip('Freckles', () => !!look.freckles, () => look.freckles = !look.freckles)]);
@@ -156,7 +158,7 @@ SN.menus = (function () {
 
   function difficulty(game, go) {
     const el = SN.el(`<div class="screen">${back}<h1>Difficulty</h1>
-      <p class="lead">Pick how hard the game is. It applies the next time a level starts.</p>
+      <p class="lead">Pick how hard the game is. It applies the next time a level starts. Each mode opens one level at a time: win a level on Mild to open Hard for it, on Hard to open Chaos, and on Chaos (with 1000 orbs and 35 badges) to open No Mercy.</p>
       <div class="row" style="justify-content:center;align-items:stretch" data-cards></div></div>`);
     const cards = el.querySelector('[data-cards]');
     const render = () => {
@@ -188,7 +190,7 @@ SN.menus = (function () {
         <label class="set"><input type="checkbox" data-s="keyLabels" ${s.keyLabels ? 'checked' : ''}> Show key letters on buttons (E, Space, R...)</label></div>
       <div class="card" style="margin-top:12px"><h3>Other</h3>
         <label class="set"><input type="checkbox" data-s="nameTag" ${s.nameTag ? 'checked' : ''}> Show my name above my character</label>
-        <label class="set"><input type="checkbox" data-s="practice" ${s.practice ? 'checked' : ''}> Practice mode (nobody can catch you)</label></div>
+        <label class="set"><input type="checkbox" data-s="practice" ${s.practice ? 'checked' : ''}> Practice mode (nobody can catch you; on No Mercy only after you win the level)</label></div>
     </div>`);
     el.querySelectorAll('[data-s]').forEach(inp => inp.addEventListener('input', () => { s[inp.dataset.s] = inp.type === 'checkbox' ? inp.checked : parseFloat(inp.value); s.save(); }));
     const group = (name, choices) => {
@@ -196,7 +198,7 @@ SN.menus = (function () {
       const render = () => { row.innerHTML = ''; choices.forEach(([v, label]) => { const b = SN.el(`<button class="chip press ${s[name] === v ? 'on' : ''}">${label}</button>`); b.addEventListener('click', () => { SN.sound.tap(); s[name] = v; s.save(); render(); }); row.appendChild(b); }); };
       render();
     };
-    group('skyMode', [[0, 'Night'], [1, 'Early morning'], [2, 'Real time']]);
+    group('skyMode', [[0, 'Night'], [1, 'Morning'], [3, 'Afternoon'], [4, 'Sunset'], [2, 'Real time']]);
     group('touchControls', [['auto', 'On-screen buttons: automatic'], ['on', 'Always'], ['off', 'Never (keyboard)']]);
     return wire(el, go);
   }
@@ -221,9 +223,23 @@ SN.menus = (function () {
       <div class="card"><h3>Sneeky Night for the web</h3>
         <p>This is the web version of Sneeky Night. It runs in any browser: on a computer, a tablet or a phone.</p>
         <p><b>Keyboard:</b> W A S D or the arrows to walk · E use · Space jump · C crouch · R carry · T taunt · Q dash · Shift run · V F G B X items · P pause · L hint · N restart · M menu</p>
-        <p>It's being rebuilt level by level. So far: Levels 1 to 7 (with the Roof), Customize Character, badges, save files, difficulty and settings. Saves are kept in this browser only.</p></div></div>`);
+        <p>It's being rebuilt level by level. So far: Levels 1 to 8 (with the Roof), Customize Character, badges, save files, difficulty and settings. It plays on Windows, Mac and Linux computers in any modern browser (Chrome, Edge, Firefox, Safari), with the keyboard or a touch screen. Saves are kept in this browser only.</p></div></div>`);
     return wire(el, go);
   }
 
-  return { title, customize, levels, badges, difficulty, settings, saves, about };
+  /// The mode you picked isn't open for this level yet: what it needs, and a way to play anyway.
+  function modeLocked(game, level, { onBack, onPlay }) {
+    const mode = SN.difficulty.current, fallback = game.playableMode(mode, level);
+    const el = SN.el(`<div class="screen" style="justify-content:center"><div class="popup" style="text-align:left;max-width:680px;border:3px solid ${SN.difficulty.colors[mode]}">
+      <h2>🔒 ${SN.difficulty.names[mode]} is locked for Level ${level}</h2>
+      <p>Each mode opens one level at a time. Win a level on Mild to open Hard for it, on Hard to open Chaos, and on Chaos to open No Mercy.</p>
+      ${game.modeNeeds(mode, level).map(([text, met]) => `<p style="margin:6px 0;font-size:20px">${met ? '✅' : '⚪️'} ${SN.esc(text)}</p>`).join('')}
+      <div class="row" style="justify-content:flex-start;gap:12px;margin-top:12px"><button class="big gray press" data-m="back">Back</button>
+      <button class="big press" style="--c:${SN.difficulty.colors[fallback]};background:${SN.difficulty.colors[fallback]}" data-m="play">Play on ${SN.difficulty.names[fallback]}</button></div></div></div>`);
+    el.querySelector('[data-m="back"]').addEventListener('click', () => { SN.sound.tap(); onBack(); });
+    el.querySelector('[data-m="play"]').addEventListener('click', () => { SN.sound.tap(); SN.settings.difficulty = fallback; SN.settings.save(); onPlay(); });
+    return el;
+  }
+
+  return { title, customize, levels, badges, difficulty, settings, saves, about, modeLocked };
 })();

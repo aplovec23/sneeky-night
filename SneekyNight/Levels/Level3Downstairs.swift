@@ -128,6 +128,7 @@ final class DownstairsModel {
         engine.onInteract = { [weak self] i in self?.interact(i) }
         engine.onDefaultInteract = { [weak self] in self?.defaultAction() }
         engine.onHazard = { [weak self] i in self?.bumped(i) }
+        engine.onPuddle = { [weak self] in self?.splashed() }
         engine.onTimeUp = { [weak self] in self?.momWakesUp(tooLoud: false) }
         engine.onTooLoud = { [weak self] in self?.momWakesUp(tooLoud: true) }
         engine.onConfirm = { [weak self] in self?.popup?.action() }
@@ -175,8 +176,9 @@ final class DownstairsModel {
         scrapSpots = Set(Self.searchSpots.shuffled().prefix(3))
         let boxes = Set(Self.lockboxSpots.shuffled().prefix(3))
         saved = [
-            .stairs: Self.stairsThings(),
-            .downstairs: Self.downstairsThings().filter { !$0.id.hasPrefix("lockbox") || boxes.contains($0.id) },
+            .stairs: Self.stairsThings() + HallwayModel.puddles([(680, 600)]),
+            .downstairs: Self.downstairsThings().filter { !$0.id.hasPrefix("lockbox") || boxes.contains($0.id) }
+                + HallwayModel.puddles([(1320, 650), (2060, 600)]),
             .garage: Self.garageThings().filter { !$0.id.hasPrefix("lockbox") || boxes.contains($0.id) },
             .basement: Self.basementThings().filter { !$0.id.hasPrefix("lockbox") || boxes.contains($0.id) },
             .yard: Self.yardThings(),
@@ -1172,6 +1174,12 @@ final class DownstairsModel {
     // MARK: Getting caught
 
     /// Bumping something makes a noise, and Mom gets up to see what it was.
+    /// No Mercy: a splash in a puddle wakes Mom.
+    private func splashed() {
+        guard phase == .sneaking, !chase.active, !momDeleted else { return }
+        chase.alarm(.mom, "SPLASH! You stepped in a puddle. Mom heard it!")
+    }
+
     private func bumped(_ i: Int) {
         let hazard = engine.things[i].hazard
         if hazard == .toy { award(.deadlySqueak) }
@@ -1554,6 +1562,7 @@ struct DownstairsLevelView: View {
 
     @ViewBuilder private func floorItem(_ thing: Thing) -> some View {
         switch thing.kind {
+        case "puddle": PuddleView(size: thing.footprint).offset(y: thing.footprint.height / 2)
         case "plank": PlankView(size: thing.footprint).offset(y: thing.footprint.height / 2)
         case "starBall": StarBallView()
         case "boostBall": BoostBallView()

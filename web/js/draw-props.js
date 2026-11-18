@@ -248,6 +248,14 @@
       D.rrect(ctx, x, y - 16, 30, 26, 4, SN.white(0.7)); D.rrect(ctx, x, y - 38, 24, 18, 4, SN.white(0.6));
       D.circle(ctx, x - 5, y - 39, 5, '#ff3b30'); D.circle(ctx, x + 5, y - 39, 5, '#ff3b30'); D.rect(ctx, x, y - 52, 2, 10, SN.white(0.5));
     },
+    /// A water puddle (No Mercy), centred on (x, y), with a ripple spreading out.
+    puddle(ctx, x, y, w, h, t) {
+      D.ellipse(ctx, x, y, w, h, 'rgba(77,140,217,.75)');
+      D.ellipse(ctx, x + 4, y - 1, w * 0.75, h * 0.6, 'rgba(140,199,255,.55)');
+      const r = ((t || SN.now()) * 0.5) % 1;
+      D.ellipse(ctx, x, y, w * (0.3 + r * 0.5), h * (0.2 + r * 0.5), null, `rgba(255,255,255,${0.5 * (1 - r)})`, 1.5);
+      D.capsule(ctx, x - w * 0.18, y - h * 0.15, w * 0.18, 3, 'rgba(255,255,255,.6)');
+    },
     sparkle(ctx, x, y, t) { const a = 0.4 + 0.6 * Math.abs(Math.sin((t || SN.now()) * 4)); D.star(ctx, x, y, 12, `rgba(255,255,255,${a})`); },
   };
   SN.props = P;

@@ -92,6 +92,8 @@ final class GameEngine {
     var player = CGPoint(x: 500, y: 620)
     var z: CGFloat = 0
     var facingRight = true
+    /// North, south, east or west: follows the joystick (and keeps the last way when you stop).
+    var facing: Facing = .east
     var walking = false
     /// Bent down while searching something (can't move).
     var crouching = false
@@ -109,6 +111,12 @@ final class GameEngine {
     var carrying: String?
     var canDash = false
     var canRun = false
+    /// Skills from Ion's shop: jump again in mid-air; press crouch while running to slide.
+    var canDoubleJump = false
+    var canSlide = false
+    /// The Sneaky Cape: you make no noise at all.
+    var silent = false
+    @ObservationIgnored private var doubleJumped = false
     /// On-screen running switch (Shift on a keyboard).
     var runHeld = false
     /// Silent Slippers: each one lets you bump one obstacle without a sound.
@@ -193,7 +201,7 @@ final class GameEngine {
     /// Creative mode: grown-ups can't catch you.
     var ghost = false
     /// Nobody can catch or hurt you: practice mode, or the creative "ghost" command.
-    var safe: Bool { ghost || Settings.shared.practice }
+    var safe: Bool { ghost || Settings.shared.practiceOn }
     /// Creative mode: drawn bigger or smaller (looks only).
     var sizeScale: CGFloat = 1
     /// Creative mode is on: you wear the creative crown and get the admin panel.
@@ -203,12 +211,20 @@ final class GameEngine {
     var guidePos: CGPoint?
     var guideWalking = false
     var guideFacingRight = true
+    var guideFacing: Facing = .east
     var guideSpeech: String?
     /// The spot the Guide is heading for (set by the level). Nil: he just walks along with you.
     @ObservationIgnored var guideGoal: () -> CGPoint? = { nil }
     /// For mazes: the next spot on the way from A to B, so the Guide follows the paths.
     @ObservationIgnored var guideWaypoint: ((CGPoint, CGPoint) -> CGPoint)?
     @ObservationIgnored private var guideTalk = 0.0
+    /// No Mercy: the Guide can get hurt by hazards. At 0 he disappears for the rest of the try.
+    var guideHP = 100.0
+    var guideGone = false
+    @ObservationIgnored private var guideHurtTime = 0.0
+    /// No Mercy: now and then he leads you somewhere useless, as sure as ever.
+    @ObservationIgnored private var guideWrongClock = 0.0
+    @ObservationIgnored private var guideWrongSpot: CGPoint?
     @ObservationIgnored private var guideArrived = false
 
     /// Two players on one iPad: player 2 walks around with their own joystick and can use things.
@@ -220,6 +236,9 @@ final class GameEngine {
 
     @ObservationIgnored var onInteract: (Int) -> Void = { _ in }
     @ObservationIgnored var onHazard: (Int) -> Void = { _ in }
+    /// No Mercy: you just stepped into a water puddle (things of kind "puddle"). The level decides who hears it.
+    @ObservationIgnored var onPuddle: () -> Void = {}
+    @ObservationIgnored private var inPuddle = false
     @ObservationIgnored var onTimeUp: () -> Void = {}
     /// E / Return / Space while a pop-up is open.
     @ObservationIgnored var onConfirm: () -> Void = {}
@@ -373,7 +392,12 @@ final class GameEngine {
         guard running, !frozen else { return }
         if let nearest {
             if springsTrap(nearest) { return }
+            let id = things[nearest].id
             onInteract(nearest)
+            // Boxes (and drawers) can only be searched once: after that there's nothing to press.
+            if let i = index(of: id), ["box", "drawer"].contains(things[i].kind), things[i].open {
+                things[i].prompt = nil
+            }
         } else if defaultPrompt != nil && !hidden {
             onDefaultInteract()
         }
@@ -396,6 +420,13 @@ final class GameEngine {
     }
 
     func jump() {
+        // Double Jump (a skill from the Shop): once more in mid-air.
+        if running, !frozen, !hidden, !flying, z > 0, canDoubleJump, !doubleJumped {
+            doubleJumped = true
+            vz = (jumpBoost ? 820 : 640) * jumpMult.squareRoot() * Difficulty.current.playerJump * 0.9
+            Sound.jump.play(volume: 0.7)
+            return
+        }
         guard running, !frozen, z == 0, vz == 0, !hidden, !flying else { return }
         if ducking {
             ducking = false
@@ -407,6 +438,17 @@ final class GameEngine {
 
     func toggleCrouch() {
         guard running, !frozen, !hidden, z == 0, !flying else { return }
+        // Slide (a skill from the Shop): crouch while running and you shoot along the floor, low and quiet.
+        if canSlide && sprinting && walking && !ducking && dashTime <= 0 {
+            ducking = true
+            carrying = nil
+            let length = hypot(input.dx, input.dy)
+            dashDirection = length > 0.2 ? CGVector(dx: input.dx / length, dy: input.dy / length) : CGVector(dx: facingRight ? 1 : -1, dy: 0)
+            dashTime = 0.45
+            dashCooldown = 1.2
+            Sound.dash.play(volume: 0.5)
+            return
+        }
         ducking.toggle()
         if ducking { carrying = nil }
         Sound.crouch.play(volume: 0.6)
@@ -440,7 +482,7 @@ final class GameEngine {
 
     /// `plain`: the amount is already set for the difficulty (taunts), so Easy's quieter steps don't apply again.
     func addNoise(_ amount: Double, plain: Bool = false) {
-        guard !noiseMuted else { return }
+        guard !noiseMuted, !silent else { return }
         noise = min(100, noise + amount * noiseFactor / noiseDiv / (plain ? 1 : Difficulty.current.quiet))
     }
 
@@ -650,6 +692,13 @@ final class GameEngine {
             v = dashDirection
             speed = 1050
         }
+        // Water puddles: wading through slows you right down, and the first splash is heard.
+        let wading = z < 10 && !flying && things.contains { $0.kind == "puddle" && !$0.hidden && $0.covers(player) }
+        if wading {
+            speed *= 0.4
+            if !inPuddle { Sound.water.play(); addNoise(25); onPuddle() }
+        }
+        if wading != inPuddle { inPuddle = wading }
         let stuck = blocked(player)
         var p = player
         let nx = CGPoint(x: min(max(p.x + v.dx * speed * dt, 40), width - 40), y: p.y)
@@ -663,6 +712,10 @@ final class GameEngine {
         let isSprinting = run && isWalking
         if isSprinting != sprinting { sprinting = isSprinting }
         if Self.turns(v), (v.dx > 0) != facingRight { facingRight = v.dx > 0 }
+        if length > 0.15 && !hidden && !frozen {
+            let way = Facing.moving(dx: input.dx, dy: input.dy)
+            if way != facing { facing = way }
+        }
         if walking && z == 0 {
             stepClock += Double(dt)
             if stepClock > (sprinting ? 0.2 : 0.32) {
@@ -684,6 +737,7 @@ final class GameEngine {
         z = max(0, z + vz * dt)
         if z == 0 {
             vz = 0
+            doubleJumped = false
             Sound.land.play(volume: 0.5)
             // Landed on top of a box: slide off to the nearer side.
             if let box = things.first(where: { $0.solid && !$0.hidden && $0.id != carrying && $0.covers(player, pad: CGSize(width: 6, height: 0)) }) {
@@ -773,16 +827,44 @@ final class GameEngine {
 
     /// "Follow me!": the Guide waits for you, then walks a little ahead toward the next place to go.
     private func updateGuide(_ dt: Double) {
-        guard Settings.shared.practice else {
+        guard Settings.shared.practiceOn, !guideGone else {
             if guidePos != nil { guidePos = nil; guideSpeech = nil }
             return
+        }
+        let noMercy = Difficulty.current == .noMercy
+        if noMercy {
+            // About every 15 seconds he's sure the answer is somewhere else, for 6 seconds.
+            guideWrongClock += dt
+            if guideWrongClock.truncatingRemainder(dividingBy: 15) < 6 {
+                if guideWrongSpot == nil {
+                    guideWrongSpot = CGPoint(x: .random(in: 80...(width - 80)), y: .random(in: floor))
+                    guideSay(["This way! Trust me.", "It's over here, I promise!", "Follow me, I know a shortcut!"].randomElement()!)
+                }
+            } else {
+                guideWrongSpot = nil
+            }
+            // Hazards hurt him just like they hurt you.
+            guideHurtTime = max(0, guideHurtTime - dt)
+            if let spot = guidePos, guideHurtTime <= 0,
+               things.contains(where: { $0.hazard != nil && !$0.hidden && $0.covers(spot, pad: CGSize(width: -6, height: -6)) }) {
+                guideHurtTime = 1.2
+                guideHP -= 20 * Difficulty.current.damageScale
+                Sound.ouch.play(volume: 0.6)
+                if guideHP <= 0 {
+                    guideGone = true
+                    guideSpeech = nil
+                    say("The Guide went \"Ow!\" and vanished. I'm on my own now!", seconds: 3)
+                    return
+                }
+                guideSay("Ow! That hurt!")
+            }
         }
         var pos = guidePos ?? CGPoint(x: min(max(player.x - 120, 40), width - 40), y: min(player.y + 10, floor.upperBound))
         if guideTalk > 0 {
             guideTalk -= dt
             if guideTalk <= 0 { guideSpeech = nil }
         }
-        let goal = guideGoal()
+        let goal = noMercy ? (guideWrongSpot ?? guideGoal()) : guideGoal()
         var target: CGPoint
         if let goal {
             let goalSpot = CGPoint(x: min(max(goal.x, 40), width - 40), y: min(max(goal.y, floor.lowerBound), floor.upperBound))
@@ -821,6 +903,8 @@ final class GameEngine {
             pos.x += dx / distance * step
             pos.y += dy / distance * step
             if abs(dx) > 4, (dx > 0) != guideFacingRight { guideFacingRight = dx > 0 }
+            let way = Facing.moving(dx: dx, dy: dy)
+            if way != guideFacing { guideFacing = way }
         }
         if moving != guideWalking { guideWalking = moving }
         if pos != guidePos { guidePos = pos }

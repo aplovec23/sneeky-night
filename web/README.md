@@ -15,7 +15,7 @@ Q dash · Shift run · V F G B X J items · P or Esc pause · L hint · N restar
 On touch screens a joystick and buttons appear (Settings → Buttons to force them on or off).
 Every key is listed once in `js/keys.js`, which also supplies the letters on the buttons.
 
-## What's built so far (stages 1–3)
+## What's built so far
 - Title, Customize Character (all hair styles, colours, tops, trousers, shoes, eyes, moods, caps,
   accessories, boosts), Levels, Badges (all 48, with Level 1 to Level 10), Difficulty (all 5 modes), Settings, Save Files.
 - Level 1 (Bedroom) and Level 2 (Hallway, your brother's room with the talk menu and drawing paper,
@@ -31,6 +31,13 @@ Every key is listed once in `js/keys.js`, which also supplies the letters on the
   then follow Auntie to the back door).
 - Level 7 (Auntie's Backyard: entry fee of 32 badges and 10 orbs; wash the mud with the hose, find the
   kittens, Auntie gives you the Water Hose boost (J), and Uncle's car drives you off).
+- Level 8 (Somewhere: the 50-second ride in Uncle's car, Grandma's garden with 20 lanterns, leaves,
+  weeds, rakes and the blue key to the gate, her doorstep questions and chores, then chasing Uncle's
+  car down the road past cones, puddles, strangers and a very full snack dog).
+- Sneeky Nights update: boxes are searched once; per-level mode unlocks (Mild → Hard → Chaos → No
+  Mercy, which also needs 1000 orbs and 35 badges); Chaos grown-ups at 75% of your speed; No Mercy
+  hurts more, adds water puddles in Levels 2–3 and locks practice mode until you win the level;
+  afternoon and sunset skies; shorts, skirts, sneakers and boots; a less squashed crouch.
 - Mom and Dad chasing you (with the "parents talk" and brother encounters), practice mode, pause menu,
   items (vines, toy, bat, lightning, cloud), sounds and music.
 

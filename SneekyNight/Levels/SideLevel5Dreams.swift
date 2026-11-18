@@ -311,7 +311,7 @@ struct DreamLevelView: View {
         made.onLose = { loseStreak() }
         made.winTitle = "You woke up!"
         made.onWin = { [weak made] in
-            game.completedSide.insert(5)
+            game.finishSide(5)
             game.award(.dreamer)
             game.dreamStreak += 1
             game.dreamBest = max(game.dreamBest, game.dreamStreak)

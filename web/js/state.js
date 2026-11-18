@@ -23,6 +23,9 @@ SN.GameState = class {
     this.gifts = data.gifts || [];
     this.orbs = data.orbs || 0;
     this.paidLevels = data.paidLevels || [];
+    /// Which modes each level has been won on: { level: [mode, ...] }. Older wins count as Mild.
+    this.beatenOn = data.beatenOn || {};
+    this.completedLevels.forEach(l => { if (!this.beatenOn[l]) this.beatenOn[l] = [1]; });
     this.onToast = () => {};
     // Levels won before their badge existed still count.
     for (const id of this.completedLevels) {
@@ -39,7 +42,7 @@ SN.GameState = class {
   save() {
     const out = {};
     ['playerName', 'look', 'hasCharacter', 'completedLevels', 'completedSide', 'skills', 'badges', 'accessories', 'boosts',
-     'hasVines', 'hasToy', 'hasBat', 'extraColors', 'caughtCount', 'retryCount', 'gifts', 'orbs', 'paidLevels'].forEach(k => out[k] = this[k]);
+     'hasVines', 'hasToy', 'hasBat', 'extraColors', 'caughtCount', 'retryCount', 'gifts', 'orbs', 'paidLevels', 'beatenOn'].forEach(k => out[k] = this[k]);
     try { localStorage.setItem(SN.GameState.key(this.slot), JSON.stringify(out)); } catch (e) { /* storage full or private mode */ }
   }
 
@@ -122,9 +125,35 @@ SN.GameState = class {
   }
   complete(level) {
     if (!this.completedLevels.includes(level)) this.completedLevels.push(level);
+    const modes = this.beatenOn[level] || [];
+    if (!modes.includes(SN.difficulty.current)) this.beatenOn[level] = modes.concat([SN.difficulty.current]);
     this.save();
     this.award('level' + level);
   }
+  // ---------- Modes, level by level ----------
+  /// The hardest mode a level has been won on (-1 = not won yet).
+  bestMode(level) { return Math.max(-1, ...(this.beatenOn[level] || [])); }
+  /// Easy and Mild are always open. Win a level on Mild to open Hard for it, on Hard to open Chaos,
+  /// and on Chaos (with 1000 orbs and 35 badges) to open No Mercy.
+  modeUnlocked(mode, level) {
+    const best = this.bestMode(level), G = SN.GameState;
+    if (mode <= 1) return true;
+    if (mode === 2) return best >= 1;
+    if (mode === 3) return best >= 2;
+    return best >= 3 && this.orbs >= G.noMercyOrbs && this.badges.length >= G.noMercyBadges;
+  }
+  /// What a locked mode still needs, as [text, met] pairs.
+  modeNeeds(mode, level) {
+    const best = this.bestMode(level), G = SN.GameState;
+    if (mode === 2) return [[`Win Level ${level} on Mild`, best >= 1]];
+    if (mode === 3) return [[`Win Level ${level} on Hard`, best >= 2]];
+    if (mode === 4) return [[`Win Level ${level} on Chaos`, best >= 3], [`Have ${G.noMercyOrbs} orbs (you have ${this.orbs})`, this.orbs >= G.noMercyOrbs],
+                            [`Earn ${G.noMercyBadges} badges (${Math.min(this.badges.length, G.noMercyBadges)}/${G.noMercyBadges})`, this.badges.length >= G.noMercyBadges]];
+    return [];
+  }
+  /// The hardest open mode up to the one wanted.
+  playableMode(wanted, level) { for (let m = wanted; m > 1; m--) if (this.modeUnlocked(m, level)) return m; return Math.min(wanted, 1); }
+
   learn(skill) {
     if (!this.skills.includes(skill)) this.skills.push(skill);
     this.save();
@@ -158,6 +187,8 @@ SN.GameState = class {
 
 SN.GameState.level7Badges = 32;
 SN.GameState.level7Price = 10;
+SN.GameState.noMercyOrbs = 1000;
+SN.GameState.noMercyBadges = 35;
 
 /// The pop-up shown when a search finds something.
 SN.lootPopup = function (loot, take) {

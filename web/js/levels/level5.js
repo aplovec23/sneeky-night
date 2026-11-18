@@ -481,7 +481,7 @@ SN.Level5 = class {
   }
 
   hint() {
-    const e = this.engine, S = SN.Level5, practice = SN.settings.practice;
+    const e = this.engine, S = SN.Level5, practice = SN.settings.practiceOn();
     switch (this.area) {
       case 'kitchen': return e.say(this.snacks > 0 ? "I've got snacks. Back out the door while Mom's back is turned!"
                                                    : 'The fridge is on the far side. Go when Mom is cooking, and crouch under a table when she walks.');

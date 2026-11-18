@@ -27,12 +27,19 @@ struct Look: Equatable {
     var eyes = 0
     /// What kind of top: T-shirt, hoodie, stripes or an open jacket (`LookOptions.shirtStyles`).
     var shirtStyle = 0
+    /// Trousers, shorts or a skirt (`LookOptions.legStyles`).
+    var legStyle = 0
+    /// Slippers, sneakers or boots (`LookOptions.shoeStyles`).
+    var shoeStyle = 0
     var freckles = false
     var blush = true
     /// The face your character makes when nothing is going on (`Mood`).
     var face = 0
     /// A picture from the photo gallery printed on the T-shirt (its id in `ShirtPhotos`). Nil = no photo.
     var photo: String?
+    /// Your own colours, picked with the colour wheel: part ("skin", "eyes", "hair", "shirt", "pants",
+    /// "shoes", "cap") → "#RRGGBB". A custom colour wins over the swatch for that part.
+    var custom: [String: String] = [:]
     /// One accessory found in a box, if you're wearing one.
     var accessory: Accessory?
     /// Boosting accessories being worn. These stack.
@@ -58,12 +65,15 @@ struct Look: Equatable {
         if let own = d.array(forKey: p + "ownHair") as? [Double], own.count == look.ownHair.count { look.ownHair = own }
         look.pants = d.object(forKey: p + "pants") == nil ? -1 : d.integer(forKey: p + "pants")
         look.shoes = d.integer(forKey: p + "shoes")
+        look.legStyle = d.integer(forKey: p + "legStyle")
+        look.shoeStyle = d.integer(forKey: p + "shoeStyle")
         look.eyes = d.integer(forKey: p + "eyes")
         look.shirtStyle = d.integer(forKey: p + "shirtStyle")
         look.freckles = d.bool(forKey: p + "freckles")
         look.blush = d.object(forKey: p + "blush") == nil ? true : d.bool(forKey: p + "blush")
         look.face = d.integer(forKey: p + "face")
         look.photo = d.string(forKey: p + "photo")
+        look.custom = d.dictionary(forKey: p + "customColors") as? [String: String] ?? [:]
         look.accessory = Accessory.find(d.string(forKey: p + "accessory") ?? "")
         look.boosts = Set((d.stringArray(forKey: p + "wornBoosts") ?? []).compactMap(Boost.init(rawValue:)))
         look.hiddenBoosts = Set((d.stringArray(forKey: p + "hiddenBoosts") ?? []).compactMap(Boost.init(rawValue:)))
@@ -81,12 +91,15 @@ struct Look: Equatable {
         d.set(ownHair, forKey: p + "ownHair")
         d.set(pants, forKey: p + "pants")
         d.set(shoes, forKey: p + "shoes")
+        d.set(legStyle, forKey: p + "legStyle")
+        d.set(shoeStyle, forKey: p + "shoeStyle")
         d.set(eyes, forKey: p + "eyes")
         d.set(shirtStyle, forKey: p + "shirtStyle")
         d.set(freckles, forKey: p + "freckles")
         d.set(blush, forKey: p + "blush")
         d.set(face, forKey: p + "face")
         d.set(photo, forKey: p + "photo")
+        d.set(custom, forKey: p + "customColors")
         d.set(accessory?.id, forKey: p + "accessory")
         d.set(boosts.map(\.rawValue), forKey: p + "wornBoosts")
         d.set(hiddenBoosts.map(\.rawValue), forKey: p + "hiddenBoosts")
@@ -163,7 +176,12 @@ enum LookOptions {
         Color(red: 0.98, green: 0.52, blue: 0.70), Color(red: 0.15, green: 0.70, blue: 0.72),
     ]
     /// Picture printed on the T-shirt; nil = plain.
-    static let patterns: [String?] = ["star.fill", "heart.fill", "bolt.fill", "moon.fill", "pawprint.fill", nil]
+    /// (The newer ones come after the plain one, so older saves keep their picture.)
+    static let patterns: [String?] = ["star.fill", "heart.fill", "bolt.fill", "moon.fill", "pawprint.fill", nil,
+                                      "flame.fill", "leaf.fill", "music.note", "face.smiling.fill", "sparkles"]
+    /// Trousers, shorts or a skirt.
+    static let legStyles = ["Trousers", "Shorts", "Skirt"]
+    static let shoeStyles = ["Slippers", "Sneakers", "Boots"]
     /// Cap colours; index 0 = no cap.
     static let caps: [Color?] = [nil, .red, Color(red: 0.2, green: 0.4, blue: 0.9), .green, Color(white: 0.15), .orange, .purple]
     static let hairStyles = ["Classic", "Spiky", "Curly", "Long", "Ponytail", "Buzz cut", "Bob", "Mohawk",
@@ -200,6 +218,62 @@ enum LookOptions {
     static let shirtStyles = ["T-shirt", "Hoodie", "Stripes", "Jacket"]
     static let allShirts = shirts + extraShirts
     static let allCaps = caps + extraCaps
+
+    /// 60 more colours for everything (tops, trousers, shoes, hair, caps and eyes): 12 hues, 5 shades
+    /// each. Their numbers come after each part's own colours, so older saves keep theirs.
+    static let palette: [Color] = {
+        let shades: [(s: Double, b: Double)] = [(0.85, 0.95), (0.55, 0.88), (0.9, 0.62), (0.32, 1.0), (0.7, 0.38)]
+        return shades.flatMap { shade in
+            (0..<12).map { h in Color(hue: Double(h) / 12, saturation: shade.s, brightness: shade.b) }
+        }
+    }()
+
+    /// A colour from a part's own list, or (past the end of it) from the shared palette.
+    static func pick(_ list: [Color], _ i: Int) -> Color {
+        let n = abs(i)
+        return n < list.count ? list[n] : palette[(n - list.count) % palette.count]
+    }
+}
+
+extension Color {
+    /// "#RRGGBB" (the custom colours in a save file).
+    init?(hex: String) {
+        let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard digits.count == 6, let value = Int(digits, radix: 16) else { return nil }
+        self.init(red: Double((value >> 16) & 0xFF) / 255, green: Double((value >> 8) & 0xFF) / 255, blue: Double(value & 0xFF) / 255)
+    }
+
+    var hex: String {
+        let ui = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let clamp = { (v: CGFloat) in Int((min(max(v, 0), 1) * 255).rounded()) }
+        return String(format: "#%02X%02X%02X", clamp(r), clamp(g), clamp(b))
+    }
+}
+
+extension Look {
+    private func own(_ part: String) -> Color? { custom[part].flatMap(Color.init(hex:)) }
+
+    var skinColor: Color { own("skin") ?? LookOptions.skins[abs(skin) % LookOptions.skins.count] }
+    var shirtColor: Color { own("shirt") ?? LookOptions.pick(LookOptions.allShirts, shirt) }
+    /// Nil: trousers match the top (a shade darker).
+    var pantsColor: Color? { own("pants") ?? (pants >= 0 ? LookOptions.pick(LookOptions.pants, pants) : nil) }
+    var shoeColor: Color { own("shoes") ?? LookOptions.pick(LookOptions.shoes, shoes) }
+    var eyeColor: Color { own("eyes") ?? LookOptions.pick(LookOptions.eyes, eyes) }
+    /// Nil: no cap.
+    var capColor: Color? {
+        if let mine = own("cap") { return mine }
+        if cap < LookOptions.allCaps.count { return LookOptions.allCaps[max(cap, 0)] }
+        return LookOptions.palette[(cap - LookOptions.allCaps.count) % LookOptions.palette.count]
+    }
+    /// Nil: the usual brown for a boy or a girl.
+    var hairPick: Color? {
+        if let mine = own("hair") { return mine }
+        if hairColor <= 0 { return nil }
+        if hairColor < LookOptions.hairColors.count { return LookOptions.hairColors[hairColor] }
+        return LookOptions.palette[(hairColor - LookOptions.hairColors.count) % LookOptions.palette.count]
+    }
 }
 
 /// Things to wear that turn up in boxes: the first 10, plus 50 more in different shapes and colours.
@@ -208,6 +282,8 @@ struct Accessory: Hashable, Identifiable {
     enum Family: String {
         case glasses, crown, bowTie, scarf, cape, headband, catEars, headphones, halo, partyHat
         case beanie, topHat, hairBow, flower
+        // Added in the Raid update
+        case bunnyEars, wizardHat, bandana, monocle, starClip, cowboyHat
     }
 
     let id: String
@@ -234,6 +310,12 @@ struct Accessory: Hashable, Identifiable {
         case .topHat: "hat.widebrim.fill"
         case .hairBow: "bandage.fill"
         case .flower: "leaf.fill"
+        case .bunnyEars: "hare.fill"
+        case .wizardHat: "wand.and.rays"
+        case .bandana: "triangle.fill"
+        case .monocle: "eyeglasses"
+        case .starClip: "star.fill"
+        case .cowboyHat: "figure.equestrian.sports"
         }
     }
 
@@ -273,11 +355,29 @@ struct Accessory: Hashable, Identifiable {
     + variants(.topHat, "Top Hat", [6, 0, 1, 3, 7])
     + variants(.hairBow, "Hair Bow", [0, 4, 1, 5, 9])
     + variants(.flower, "Flower", [4, 5, 0, 3, 8])
+    // The Raid update: every shade the first ten kinds were missing (50)...
+    + variants(.glasses, "Glasses", [3, 5, 6, 8, 9])
+    + variants(.bowTie, "Bow Tie", [0, 4, 7, 8, 9])
+    + variants(.scarf, "Scarf", [5, 6, 7, 8, 9])
+    + variants(.cape, "Cape", [0, 4, 5, 8, 9])
+    + variants(.headband, "Headband", [0, 3, 7, 8, 9])
+    + variants(.partyHat, "Party Hat", [3, 4, 5, 6, 7])
+    + variants(.beanie, "Beanie", [4, 5, 6, 7, 9])
+    + variants(.topHat, "Top Hat", [2, 4, 5, 8, 9])
+    + variants(.hairBow, "Hair Bow", [2, 3, 6, 7, 8])
+    + variants(.flower, "Flower", [1, 2, 6, 7, 9])
+    // ...and six new kinds in five colours each (30).
+    + variants(.bunnyEars, "Bunny Ears", [3, 4, 6, 7, 9])
+    + variants(.wizardHat, "Wizard Hat", [1, 3, 6, 7, 0])
+    + variants(.bandana, "Bandana", [0, 1, 2, 6, 8])
+    + variants(.monocle, "Monocle", [7, 6, 0, 1, 3])
+    + variants(.starClip, "Star Clip", [5, 7, 4, 9, 3])
+    + variants(.cowboyHat, "Cowboy Hat", [6, 0, 1, 8, 7])
 
     /// Only sold in the dungeon's orb shop, and only in the demo. They don't count toward "every accessory".
     static let exclusives: [Accessory] = [
         Accessory(id: "demo-crown", family: .crown, name: "Demo Crystal Crown", color: .cyan),
-        Accessory(id: "demo-halo", family: .halo, name: "Demo Orb Halo", color: Color(red: 0.75, green: 0.45, blue: 1)),
+        Accessory(id: "demo-halo", family: .halo, name: "Demo Moonlight Halo", color: Color(red: 0.75, green: 0.45, blue: 1)),
         Accessory(id: "demo-cape", family: .cape, name: "Demo Miner's Cape", color: .teal),
         Accessory(id: "demo-ears", family: .catEars, name: "Demo Ghost Ears", color: .white),
         Accessory(id: "demo-headphones", family: .headphones, name: "Demo Golden Headphones", color: Palette.gold),
@@ -298,13 +398,17 @@ enum Boost: String, CaseIterable, Identifiable {
     case guidesHat
     /// Auntie's water hose: only ever given by Auntie at the end of Level 7.
     case waterHose
+    /// Sold by Ion in the Shop (1000 moonlights each).
+    case nokia, phone, sneakyCape
 
     var id: String { rawValue }
 
     /// The boosts that never turn up in boxes, rats or chests: the Guide's Hat and Auntie's Water Hose.
     static let special: [Boost] = [.guidesHat, .waterHose]
+    /// Only Ion sells these.
+    static let shopOnly: [Boost] = [.nokia, .phone, .sneakyCape]
     /// Every boost you can actually find (boxes, rats, the roof, the secret room).
-    static let findable: [Boost] = allCases.filter { !special.contains($0) }
+    static let findable: [Boost] = allCases.filter { !special.contains($0) && !shopOnly.contains($0) }
     var name: String {
         switch self {
         case .coolCap: "Cool Cap with a Can"
@@ -316,6 +420,9 @@ enum Boost: String, CaseIterable, Identifiable {
         case .cloud: "Cloud"
         case .guidesHat: "The Guide's Hat"
         case .waterHose: "Water Hose"
+        case .nokia: "Nokia"
+        case .phone: "Phone"
+        case .sneakyCape: "Sneaky Cape"
         }
     }
     var about: String {
@@ -329,6 +436,9 @@ enum Boost: String, CaseIterable, Identifiable {
         case .cloud: "Press X: fly for 10 seconds, over obstacles and hedges. 30 second cooldown."
         case .guidesHat: "Press H: switch it on or off. While it's on, everything is ×10.5 and you walk through things."
         case .waterHose: "Press J: spray whoever is chasing you so they can't see for 8 seconds (every 25). In Level 4 it waters five plants at once."
+        case .nokia: "Health ×2. Unbreakable, like every Nokia."
+        case .phone: "Press O: your own phone, with Notes you can type in and minigames. The game waits while it's open."
+        case .sneakyCape: "You make no noise at all, and speed, jump and dash are all ×1.2"
         }
     }
     var symbol: String {
@@ -342,6 +452,9 @@ enum Boost: String, CaseIterable, Identifiable {
         case .cloud: "cloud.fill"
         case .guidesHat: "hat.widebrim.fill"
         case .waterHose: "drop.circle.fill"
+        case .nokia: "candybarphone"
+        case .phone: "iphone"
+        case .sneakyCape: "theatermasks.fill"
         }
     }
     var color: Color {
@@ -355,6 +468,9 @@ enum Boost: String, CaseIterable, Identifiable {
         case .cloud: Color(red: 0.8, green: 0.92, blue: 1)
         case .guidesHat: GuidesHat.color
         case .waterHose: Color(red: 0.25, green: 0.70, blue: 0.85)
+        case .nokia: Color(red: 0.35, green: 0.55, blue: 0.85)
+        case .phone: Color(white: 0.85)
+        case .sneakyCape: Color(red: 0.30, green: 0.18, blue: 0.45)
         }
     }
 
@@ -370,6 +486,9 @@ enum Boost: String, CaseIterable, Identifiable {
         case .cloud: "A scrap of morning fog that got caught in the garden hedge and never left."
         case .guidesHat: "The Guide's own hat. Nobody knows who made it, and he only lends it to people he chooses himself."
         case .waterHose: "Auntie's garden hose, coiled on her back step for thirty years. She gave it to you for washing her backyard and finding every kitten."
+        case .nokia: "Ion found it in a drawer full of chargers. It has been dropped down the stairs, run over by a toy car and sat on by Dad, and it still has three bars of battery."
+        case .phone: "Ion's old phone, wiped clean. The calling bit stopped working years ago, but the notes and the games never did."
+        case .sneakyCape: "Woven by Ion from the hush between two ticks of a clock. Nobody hears it move, and nobody hears you."
         }
     }
 
@@ -476,7 +595,7 @@ enum Badge: String, CaseIterable, Identifiable {
     }
 
     /// Not possible until a later update. These show up named "soon". A level's badge is "soon"
-    /// until that level exists (Levels 8 to 10 for now).
+    /// until that level exists (Level 10 for now).
     var isSoon: Bool {
         if self == .aprilFool || self == .jolly { return true }
         if let level = levelNumber { return !(Levels.all.first { $0.id == level }?.isReady ?? false) }
@@ -589,7 +708,7 @@ enum Badge: String, CaseIterable, Identifiable {
         case .worldRevolving: return "Sprint with star ball power while wearing every speed-boosting accessory."
         case .kittens: return "Find every missing kitten in Auntie's backyard."
         case .dreamer: return "Wake up from a dream (Side Level 5)."
-        case .wholeGame: return "Complete the whole game: every level, and Side Levels 1 to 5."
+        case .wholeGame: return "Complete the whole game: every level, and Side Levels 1, 2, 3 and 5."
         }
     }
 
@@ -656,14 +775,92 @@ enum Badge: String, CaseIterable, Identifiable {
 /// Moves learned from skill papers. Once learned they work in every level.
 enum Skill: String, CaseIterable {
     case dash, run
+    /// Bought from Ion in the Shop (1569 moonlights each).
+    case doubleJump, slide
+    /// Uncle's reward at the end of Level 9: upgrade boosting and defensive items in the Shop.
+    case tinker
 
-    var title: String { self == .dash ? "DASH" : "RUN" }
+    /// The ones that come from skill papers in boxes.
+    static let papers: [Skill] = [.dash, .run]
+    /// The ones Ion sells.
+    static let forSale: [Skill] = [.doubleJump, .slide]
+    static let price = 1569
+
+    var title: String {
+        switch self {
+        case .dash: "DASH"
+        case .run: "RUN"
+        case .doubleJump: "DOUBLE JUMP"
+        case .slide: "SLIDE"
+        case .tinker: "UPGRADE ITEMS"
+        }
+    }
     var how: String {
         switch self {
         case .dash: "Press Q (or the wind button) to zoom forward!"
         case .run: "Hold Shift (or turn on the running button) to run fast. Running is noisy, so be careful!"
+        case .doubleJump: "Press Space again in the air to jump a second time, higher still."
+        case .slide: "While running, press C: you slide along the floor, low and silent, under lasers and past things you'd bump into."
+        case .tinker: "Spend moonlights in the Shop to upgrade your boosting items and your defensive items (vines, toy, bat, hose), up to level 3."
         }
     }
+    var symbol: String {
+        switch self {
+        case .dash: "wind"
+        case .run: "figure.run"
+        case .doubleJump: "arrow.up.to.line.compact"
+        case .slide: "figure.skating"
+        case .tinker: "wrench.and.screwdriver.fill"
+        }
+    }
+}
+
+/// Things the Upgrade Items skill (Level 9) can improve, three levels each.
+enum UpgradeItem: String, CaseIterable, Identifiable {
+    // Boosting items
+    case coolCap, leaf, windCrown, goldenCrown, arrow, lightningBall, cloud, nokia, sneakyCape
+    // Defensive items
+    case vines, toy, bat, hose
+
+    var id: String { rawValue }
+    static let maxLevel = 3
+    static let boosting: [UpgradeItem] = [.coolCap, .leaf, .windCrown, .goldenCrown, .arrow, .lightningBall, .cloud, .nokia, .sneakyCape]
+    static let defensive: [UpgradeItem] = [.vines, .toy, .bat, .hose]
+
+    var boost: Boost? { Boost(rawValue: rawValue) }
+    var name: String {
+        switch self {
+        case .vines: "Vines"
+        case .toy: "Brother's toy"
+        case .bat: "Bat"
+        case .hose: "Water Hose"
+        default: boost?.name ?? rawValue
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .vines: "leaf.arrow.triangle.circlepath"
+        case .toy: "teddybear.fill"
+        case .bat: "figure.baseball"
+        case .hose: "drop.fill"
+        default: boost?.symbol ?? "star.fill"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .vines: .green
+        case .toy: .pink
+        case .bat: .orange
+        case .hose: Boost.waterHose.color
+        default: boost?.color ?? .white
+        }
+    }
+    /// What one level adds.
+    var perLevel: String {
+        UpgradeItem.defensive.contains(self) ? "+30% longer stun, −15% wait" : "its boost +50% stronger"
+    }
+    /// Moonlights for the next level.
+    func cost(from level: Int) -> Int { 400 * (level + 1) }
 }
 
 /// Something found while searching: a rare boost (1 in 15) or an ordinary accessory (1 in 5).
@@ -692,14 +889,23 @@ final class GameState {
     /// More T-shirt and cap colours, from Side Level 1's secret room.
     var extraColors: Bool { didSet { save() } }
     var completedSide: Set<Int> { didSet { save(); checkWholeGame() } }
-    /// Dungeon money, and how many orbs you've ever mined (for the dungeon quest).
+    /// Moonlights: the game's money (they were called orbs before; the save still uses that name).
     var orbs: Int { didSet { save() } }
+    var moonlights: Int {
+        get { orbs }
+        set { orbs = newValue }
+    }
     var orbsMined: Int { didSet { save() } }
-    /// The cinema: how many seconds into each show you are, and the shows you've watched to the end.
-    var cinemaTime: [Int: Double] { didSet { save() } }
-    var cinemaWatched: Set<Int> { didSet { save() } }
     /// Orb-shop upgrades: how many steps of each stat you've bought.
     var upgrades: [Stat: Int] { didSet { save() } }
+    /// Item upgrades from the Upgrade Items skill (Level 9): item → level 0 to 3.
+    var itemLevels: [UpgradeItem: Int] { didSet { save() } }
+    /// Notes typed on the Phone (a boost from the Shop).
+    var phoneNotes: [String] { didSet { save() } }
+    /// Best scores in the Phone's minigames.
+    var phoneBest: [String: Int] { didSet { save() } }
+    /// Moonlights just earned, to show on screen for a moment (not saved).
+    var moonlightToast: Int?
     /// Creative mode switched on (only works once it's unlocked).
     var creativeOn: Bool { didSet { save() } }
     /// Two players on this iPad. Not saved: it's off again next launch.
@@ -717,6 +923,8 @@ final class GameState {
     var dreamBest: Int { didSet { save() } }
     /// Levels you've paid to get into (Level 7 costs orbs).
     var paidLevels: Set<Int> { didSet { save() } }
+    /// Which difficulties each story level has been won on (level → `Difficulty` raw values).
+    var beatenOn: [Int: Set<Int>] { didSet { save() } }
     var caughtCount: Int { didSet { save() } }
     var retryCount: Int { didSet { save() } }
     /// Who has been given a toy: "mom", "brother", "dad".
@@ -750,6 +958,11 @@ final class GameState {
         dreamStreak = defaults.integer(forKey: p + "dreamStreak")
         dreamBest = defaults.integer(forKey: p + "dreamBest")
         paidLevels = Set(defaults.array(forKey: p + "paidLevels") as? [Int] ?? [])
+        var modes: [Int: Set<Int>] = [:]
+        for (key, value) in defaults.dictionary(forKey: p + "beatenOn") as? [String: [Int]] ?? [:] {
+            if let level = Int(key) { modes[level] = Set(value) }
+        }
+        beatenOn = modes
         hasCharacter = defaults.bool(forKey: p + "hasCharacter")
         let won = Set(defaults.array(forKey: p + "completedLevels") as? [Int] ?? [])
         let learned = Set((defaults.stringArray(forKey: p + "skills") ?? []).compactMap(Skill.init(rawValue:)))
@@ -765,17 +978,18 @@ final class GameState {
         completedSide = Set(defaults.array(forKey: p + "completedSide") as? [Int] ?? [])
         orbs = defaults.integer(forKey: p + "orbs")
         orbsMined = defaults.integer(forKey: p + "orbsMined")
-        var places: [Int: Double] = [:]
-        for (key, value) in defaults.dictionary(forKey: p + "cinemaTime") as? [String: Double] ?? [:] {
-            if let show = Int(key) { places[show] = value }
-        }
-        cinemaTime = places
-        cinemaWatched = Set(defaults.array(forKey: p + "cinemaWatched") as? [Int] ?? [])
         var bought: [Stat: Int] = [:]
         for (key, value) in defaults.dictionary(forKey: p + "upgrades") as? [String: Int] ?? [:] {
             if let stat = Stat(rawValue: key) { bought[stat] = value }
         }
         upgrades = bought
+        var tuned: [UpgradeItem: Int] = [:]
+        for (key, value) in defaults.dictionary(forKey: p + "itemLevels") as? [String: Int] ?? [:] {
+            if let item = UpgradeItem(rawValue: key) { tuned[item] = value }
+        }
+        itemLevels = tuned
+        phoneNotes = defaults.stringArray(forKey: p + "phoneNotes") ?? []
+        phoneBest = defaults.dictionary(forKey: p + "phoneBest") as? [String: Int] ?? [:]
         creativeOn = defaults.bool(forKey: p + "creativeOn")
         caughtCount = defaults.integer(forKey: p + "caughtCount")
         retryCount = defaults.integer(forKey: p + "retryCount")
@@ -790,6 +1004,8 @@ final class GameState {
         }
         if earned.contains(.fly) || earned.contains(.owl) { earned.insert(.fly) }
         badges = earned
+        // Levels won before modes were tracked count as won on Mild.
+        for level in won where beatenOn[level] == nil { beatenOn[level] = [Difficulty.mild.rawValue] }
         // The Guide's Hat only exists on devices it was given to.
         if GuidesHat.grantedHere {
             boosts.insert(.guidesHat)
@@ -843,9 +1059,49 @@ final class GameState {
         if Self.cussWords.contains(where: { name.contains($0) }) { award(.southPark) }
     }
 
-    /// "how did we get here": the whole game done, every level and Side Levels 1 to 5.
+    // MARK: Difficulty unlocks (story levels only; side levels are open on every mode)
+
+    static let noMercyOrbs = 1000
+    static let noMercyBadges = 35
+
+    /// The hardest mode this level has been won on, or nil if it hasn't been won yet.
+    func bestMode(_ level: Int) -> Difficulty? {
+        (beatenOn[level] ?? []).compactMap(Difficulty.init(rawValue:)).max { $0.rawValue < $1.rawValue }
+    }
+
+    /// Easy and Mild are always open. Win a level on Mild to open Hard for it, on Hard to open
+    /// Chaos, and on Chaos (with 1000 orbs and 35 badges) to open No Mercy.
+    func modeUnlocked(_ mode: Difficulty, level: Int) -> Bool {
+        let best = bestMode(level)?.rawValue ?? -1
+        switch mode {
+        case .easy, .mild: return true
+        case .hard: return best >= Difficulty.mild.rawValue
+        case .chaos: return best >= Difficulty.hard.rawValue
+        case .noMercy: return best >= Difficulty.chaos.rawValue && orbs >= Self.noMercyOrbs && badges.count >= Self.noMercyBadges
+        }
+    }
+
+    /// What's still needed to play this level on this mode (empty when it's open).
+    func modeNeeds(_ mode: Difficulty, level: Int) -> [(text: String, met: Bool)] {
+        let best = bestMode(level)?.rawValue ?? -1
+        switch mode {
+        case .easy, .mild: return []
+        case .hard: return [("Win Level \(level) on Mild", best >= Difficulty.mild.rawValue)]
+        case .chaos: return [("Win Level \(level) on Hard", best >= Difficulty.hard.rawValue)]
+        case .noMercy: return [("Win Level \(level) on Chaos", best >= Difficulty.chaos.rawValue),
+                               ("Have \(Self.noMercyOrbs) moonlights (you have \(moonlights))", orbs >= Self.noMercyOrbs),
+                               ("Earn \(Self.noMercyBadges) badges (\(min(badges.count, Self.noMercyBadges))/\(Self.noMercyBadges))", badges.count >= Self.noMercyBadges)]
+        }
+    }
+
+    /// The hardest mode open for this level, up to `wanted`.
+    func playableMode(_ wanted: Difficulty, level: Int) -> Difficulty {
+        Difficulty.allCases.filter { $0.rawValue <= wanted.rawValue && modeUnlocked($0, level: level) }.last ?? .mild
+    }
+
+    /// "how did we get here": the whole game done, every level and Side Levels 1, 2, 3 and 5 (the cinema, 4, was removed).
     /// (The Room, Side Level 6, needs the Guide's Hat, so it doesn't count.)
-    var wholeGameDone: Bool { allLevelsWon && (1...5).allSatisfy { completedSide.contains($0) } }
+    var wholeGameDone: Bool { allLevelsWon && [1, 2, 3, 5].allSatisfy { completedSide.contains($0) } }
 
     func checkWholeGame() {
         if wholeGameDone { award(.wholeGame) }
@@ -913,7 +1169,7 @@ final class GameState {
 
     /// Side Level 1's treasure chest: a boost you don't have yet, or the extra colours.
     func claimSideReward() -> SideReward {
-        completedSide.insert(1)
+        finishSide(1)
         var choices: [SideReward] = []
         if let boost = Boost.findable.filter({ !boosts.contains($0) }).randomElement() { choices.append(.boost(boost)) }
         if !extraColors { choices.append(.colors) }
@@ -934,15 +1190,8 @@ final class GameState {
     /// Every level that exists so far is won.
     var allLevelsWon: Bool { Levels.all.filter(\.isReady).allSatisfy { completedLevels.contains($0.id) } }
     static let sideLevelCount = 2
+    /// Side Level 2 is the Shop: open to everyone (it used to be the dungeon).
     var allSidesDone: Bool { (1...Self.sideLevelCount).allSatisfy { completedSide.contains($0) } }
-
-    /// Side Level 2 (the dungeon): Level 5, the first side level, and the Friendly Route badge.
-    var dungeonRequirements: [(text: String, met: Bool)] {
-        [("Win Level 5", completedLevels.contains(5)),
-         ("Finish Side Level 1", completedSide.contains(1)),
-         ("Earn the \"Friendly Route\" badge", badges.contains(.friendlyRoute))]
-    }
-    var dungeonUnlocked: Bool { dungeonRequirements.allSatisfy(\.met) }
 
     /// Side Level 3 (Uncle's car): every level won and 30 badges. It isn't needed for the Lore or creative mode.
     var carRequirements: [(text: String, met: Bool)] {
@@ -968,7 +1217,75 @@ final class GameState {
     var creativeActive: Bool { creativeOn && creativeUnlocked }
 
     /// What the worn boosts and the orb-shop upgrades add to your health (Level 5 on).
-    var maxHP: Double { 100 + 45 * Double(look.boosts.count) + Stat.health.value(at: upgrades[.health] ?? 0) }
+    var maxHP: Double {
+        let base = 100 + 45 * Double(look.boosts.count) + Stat.health.value(at: upgrades[.health] ?? 0)
+        // The Nokia doubles it (more with upgrades: ×2.5, ×3, ×3.5).
+        return look.boosts.contains(.nokia) ? base * (2 + 0.5 * Double(itemLevels[.nokia] ?? 0)) : base
+    }
+
+    // MARK: Moonlights and the Shop
+
+    /// Moonlights for winning a story level (again or for the first time): more for later levels and harder modes.
+    static func levelReward(_ level: Int) -> Int {
+        Int((Double(50 + 25 * level) * Difficulty.current.moonlightScale).rounded())
+    }
+    /// Moonlights for finishing a side level, every time.
+    static let sideReward = 150
+
+    /// Adds moonlights and shows "+N" on screen for a moment.
+    func earn(_ amount: Int) {
+        guard amount > 0 else { return }
+        orbs += amount
+        moonlightToast = amount
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if moonlightToast == amount { moonlightToast = nil }
+        }
+    }
+
+    /// A side level was finished (again, or for the first time): it counts as done and pays moonlights.
+    func finishSide(_ number: Int) {
+        completedSide.insert(number)
+        earn(Self.sideReward)
+    }
+
+    static let shopItemPrice = 1000
+
+    /// Buys one of Ion's boosting items. False if you can't afford it or already have it.
+    func buy(_ boost: Boost) -> Bool {
+        guard Boost.shopOnly.contains(boost), !boosts.contains(boost), orbs >= Self.shopItemPrice else { return false }
+        orbs -= Self.shopItemPrice
+        boosts.insert(boost)
+        look.boosts.insert(boost)
+        return true
+    }
+
+    /// Buys one of Ion's skills.
+    func buy(_ skill: Skill) -> Bool {
+        guard Skill.forSale.contains(skill), !skills.contains(skill), orbs >= Skill.price else { return false }
+        orbs -= Skill.price
+        learn(skill)
+        return true
+    }
+
+    /// Upgrades an item one level (needs the Upgrade Items skill from Level 9, and the item).
+    func upgrade(_ item: UpgradeItem) -> Bool {
+        let level = itemLevels[item] ?? 0
+        guard skills.contains(.tinker), level < UpgradeItem.maxLevel, owns(item), orbs >= item.cost(from: level) else { return false }
+        orbs -= item.cost(from: level)
+        itemLevels[item] = level + 1
+        return true
+    }
+
+    func owns(_ item: UpgradeItem) -> Bool {
+        switch item {
+        case .vines: hasVines
+        case .toy: hasToy
+        case .bat: hasBat
+        case .hose: boosts.contains(.waterHose)
+        default: item.boost.map { boosts.contains($0) } ?? false
+        }
+    }
 
     /// Buys the next step of a stat with orbs. Returns false if you can't afford it or it's maxed.
     func buyUpgrade(_ stat: Stat) -> Bool {
@@ -997,7 +1314,7 @@ final class GameState {
     var level7Requirements: [(text: String, met: Bool)] {
         [("Win Level 6", completedLevels.contains(6)),
          ("Earn \(Self.level7Badges) badges (\(min(badges.count, Self.level7Badges))/\(Self.level7Badges))", badges.count >= Self.level7Badges),
-         ("Pay \(Self.level7Price) orbs (you have \(orbs))", paidLevels.contains(7) || orbs >= Self.level7Price)]
+         ("Pay \(Self.level7Price) moonlights (you have \(moonlights))", paidLevels.contains(7) || orbs >= Self.level7Price)]
     }
 
     /// Pays Level 7's entry. False if you can't yet (not enough orbs or badges, or Level 6 not won).
@@ -1015,6 +1332,8 @@ final class GameState {
 
     func complete(level: Int) {
         completedLevels.insert(level)
+        earn(Self.levelReward(level))
+        beatenOn[level, default: []].insert(Difficulty.current.rawValue)
         if let badge = Badge.forLevel(level) { award(badge) }
     }
 
@@ -1034,6 +1353,7 @@ final class GameState {
         defaults.set(dreamStreak, forKey: p + "dreamStreak")
         defaults.set(dreamBest, forKey: p + "dreamBest")
         defaults.set(Array(paidLevels), forKey: p + "paidLevels")
+        defaults.set(Dictionary(uniqueKeysWithValues: beatenOn.map { (String($0.key), Array($0.value)) }), forKey: p + "beatenOn")
         defaults.set(hasCharacter, forKey: p + "hasCharacter")
         defaults.set(Array(completedLevels), forKey: p + "completedLevels")
         defaults.set(skills.map(\.rawValue), forKey: p + "skills")
@@ -1047,9 +1367,10 @@ final class GameState {
         defaults.set(Array(completedSide), forKey: p + "completedSide")
         defaults.set(orbs, forKey: p + "orbs")
         defaults.set(orbsMined, forKey: p + "orbsMined")
-        defaults.set(Dictionary(uniqueKeysWithValues: cinemaTime.map { (String($0.key), $0.value) }), forKey: p + "cinemaTime")
-        defaults.set(Array(cinemaWatched), forKey: p + "cinemaWatched")
         defaults.set(Dictionary(uniqueKeysWithValues: upgrades.map { ($0.key.rawValue, $0.value) }), forKey: p + "upgrades")
+        defaults.set(Dictionary(uniqueKeysWithValues: itemLevels.map { ($0.key.rawValue, $0.value) }), forKey: p + "itemLevels")
+        defaults.set(phoneNotes, forKey: p + "phoneNotes")
+        defaults.set(phoneBest, forKey: p + "phoneBest")
         defaults.set(creativeOn, forKey: p + "creativeOn")
         defaults.set(caughtCount, forKey: p + "caughtCount")
         defaults.set(retryCount, forKey: p + "retryCount")
@@ -1111,6 +1432,8 @@ enum Levels {
         case 5: LevelInfo(id: 5, room: "Street", symbol: "road.lanes", seconds: seconds[4], isReady: true)
         case 6: LevelInfo(id: 6, room: "Auntie's House", symbol: "cat.fill", seconds: seconds[5], isReady: true)
         case 7: LevelInfo(id: 7, room: "Auntie's Backyard", symbol: "drop.fill", seconds: seconds[6], isReady: true)
+        case 8: LevelInfo(id: 8, room: "Somewhere", symbol: "lamp.table.fill", seconds: seconds[7], isReady: true)
+        case 9: LevelInfo(id: 9, room: "Raid", symbol: "figure.baseball", seconds: seconds[8], isReady: true)
         default: LevelInfo(id: id, room: "Coming soon", symbol: "lock.fill", seconds: seconds[id - 1], isReady: false)
         }
     }

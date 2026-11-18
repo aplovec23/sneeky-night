@@ -7,7 +7,10 @@ SN.look = {
            [0.15, 0.15, 0.15], [1, 1, 1], [0.55, 0.95, 0.45], [0.45, 0.30, 0.85], [0.60, 0.38, 0.20], [0.55, 0.85, 1.0]].map(c => SN.rgb(...c)),
   /// The first 8 shirt colours; the rest unlock in the Other Hallway's secret room.
   baseShirts: 8,
-  patterns: ['star', 'heart', 'bolt', 'moon', 'paw', null],
+  /// Newer pictures come after the plain one, so older saves keep theirs.
+  patterns: ['star', 'heart', 'bolt', 'moon', 'paw', null, 'flame', 'leaf', 'music', 'smile', 'sparkles'],
+  legStyles: ['Trousers', 'Shorts', 'Skirt'],
+  shoeStyles: ['Slippers', 'Sneakers', 'Boots'],
   caps: [null, '#ff3b30', SN.rgb(0.2, 0.4, 0.9), '#34c759', SN.white(0.15), '#ff9500', '#af52de', '#ffffff', '#ff2d55', '#32ade6', SN.colors.gold],
   baseCaps: 7,
   hairStyles: ['Classic', 'Spiky', 'Curly', 'Long', 'Ponytail', 'Buzz cut', 'Bob', 'Mohawk', 'Pigtails', 'Afro', 'Bun', 'Space buns',
@@ -21,7 +24,7 @@ SN.look = {
   moods: ['Calm', 'Happy', 'Worried', 'Scared', 'Surprised', 'Sneaky', 'Sleepy', 'Cross'],
   starter(gender) {
     return { gender, skin: 0, shirt: gender === 'boy' ? 0 : 1, pattern: 0, cap: 0, hair: 0, hairColor: 0, pants: -1, shoes: 0, eyes: 0,
-             shirtStyle: 0, freckles: false, blush: true, face: 0, accessory: null, boosts: [], hiddenBoosts: [] };
+             shirtStyle: 0, legStyle: 0, shoeStyle: 0, freckles: false, blush: true, face: 0, accessory: null, boosts: [], hiddenBoosts: [] };
   },
 };
 
@@ -106,7 +109,7 @@ SN.levels = [
   { id: 5, room: 'Street', icon: '🛣', seconds: 350, ready: true },
   { id: 6, room: "Auntie's House", icon: '🐈', seconds: 400, ready: true },
   { id: 7, room: "Auntie's Backyard", icon: '💧', seconds: 450, ready: true },
-  { id: 8, room: 'Coming soon', icon: '🔒', seconds: 500, ready: false },
+  { id: 8, room: 'Somewhere', icon: '🏮', seconds: 500, ready: true },
   { id: 9, room: 'Coming soon', icon: '🔒', seconds: 550, ready: false },
   { id: 10, room: 'Coming soon', icon: '🔒', seconds: 600, ready: false },
 ];

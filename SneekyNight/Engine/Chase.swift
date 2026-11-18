@@ -16,6 +16,8 @@ final class Chase {
     var visible = false
     var pos = CGPoint.zero
     var facingRight = true
+    /// The way they're walking (they turn to face you again when they stop).
+    var facing: Facing = .south
     var walking = false
     /// Seconds left seeing stars (vines, the bat, a thrown toy).
     var stunned = 0.0
@@ -334,9 +336,12 @@ final class Chase {
             pos.x += dx / distance * step
             pos.y += dy / distance * step * (abs(dx) > abs(dy) ? 1 : 0.8)
             if abs(dx) > 3 { facingRight = dx > 0 }
+            let way = Facing.moving(dx: dx, dy: dy)
+            if way != facing { facing = way }
             if !walking { walking = true }
         } else if walking {
             walking = false
+            facing = .south
         }
 
         let name = who == .mom ? "Mom" : "Dad"
@@ -397,7 +402,7 @@ final class Chase {
         if engine?.safe == true {
             stunned = 4
             walking = false
-            if Settings.shared.practice {
+            if Settings.shared.practiceOn {
                 say("Just practice... carry on.", for: 3)
                 engine?.say("Practice mode: I would have been caught right here!", seconds: 2.5)
             } else {
@@ -444,9 +449,10 @@ struct ChaserView: View {
         if chase.active && chase.visible {
             Group {
                 if chase.who == .mom {
-                    MomView(stunned: chase.stunned > 0, walking: chase.walking, expression: chase.mood)
+                    MomView(stunned: chase.stunned > 0, walking: chase.walking, expression: chase.mood, facing: chase.walking ? chase.facing : .south)
                 } else {
-                    DadView(stunned: chase.stunned > 0, walking: chase.walking, laughing: chase.laughing > 0, expression: chase.mood)
+                    DadView(stunned: chase.stunned > 0, walking: chase.walking, laughing: chase.laughing > 0, expression: chase.mood,
+                            facing: chase.walking ? chase.facing : .south)
                 }
             }
             .scaleEffect(x: chase.talking && !chase.facingRight ? -1 : 1, y: 1)

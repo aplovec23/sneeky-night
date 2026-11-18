@@ -58,12 +58,12 @@ enum Sound: String, CaseIterable {
         case .rustle: "Bush"
         case .whip: "Vine whip"
         case .bonk: "Bat bonk"
-        case .applause: "Cinema: applause"
-        case .projector: "Cinema: projector starting"
-        case .seat: "Cinema: sitting down"
-        case .ticket: "Cinema: ticket"
-        case .popcorn: "Cinema: popcorn"
-        case .chime: "Cinema: new part"
+        case .applause: "applause"
+        case .projector: "projector starting"
+        case .seat: "sitting down"
+        case .ticket: "ticket"
+        case .popcorn: "popcorn"
+        case .chime: "new part"
         }
     }
 

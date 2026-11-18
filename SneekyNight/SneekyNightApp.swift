@@ -13,7 +13,7 @@ struct SneekyNightApp: App {
 
 enum Screen: Equatable {
     case title, customize, levels, badges, sounds, saves, settings, updateLog, sideLevels, side(Int), level(Int)
-    case difficulty, multiplayer, lore, maker, makerEdit(String), makerPlay(String), customizeP2, customizeGuide
+    case difficulty, multiplayer, lore, maker, makerEdit(String), makerPlay(String), customizeP2, customizeGuide, shop
 }
 
 struct ContentView: View {
@@ -25,14 +25,20 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             switch screen {
+            // A story level on a mode it hasn't been unlocked for yet: say what's needed instead.
+            case .level(let n) where n <= Levels.all.count && !game.modeUnlocked(Difficulty.current, level: n):
+                FitToPhone(night: true) { ModeLockedView(level: n, onBack: { screen = .title }) }
             case .title:
                 FitToPhone(night: true) {
                     TitleView(onPlay: play, onLevels: { screen = .levels }, onCustomize: { screen = .customize },
                               onBadges: { screen = .badges }, onSaves: { screen = .saves },
                               onSideLevels: { screen = .sideLevels }, onSettings: { screen = .settings },
                               onUpdateLog: { screen = .updateLog }, onMultiplayer: { screen = .multiplayer },
-                              onMaker: { screen = .maker }, onLore: { screen = .lore }, onDifficulty: { screen = .difficulty })
+                              onMaker: { screen = .maker }, onLore: { screen = .lore }, onDifficulty: { screen = .difficulty },
+                              onShop: { screen = .shop })
                 }
+            case .shop:
+                FitToPhone(night: true) { ShopMenuView(onBack: { screen = .title }) }
             case .saves:
                 FitToPhone(night: true) {
                     SaveFilesView(onPick: { slot in
@@ -55,12 +61,10 @@ struct ContentView: View {
                 RoomLevelView(onExit: { screen = .sideLevels })
             case .side(5):
                 DreamLevelView(onExit: { screen = .sideLevels })
-            case .side(4):
-                CinemaView(onExit: { screen = .sideLevels })
             case .side(3):
                 UncleCarView(onExit: { screen = .sideLevels })
             case .side(2):
-                DungeonLevelView(onExit: { screen = .sideLevels })
+                ShopLevelView(onExit: { screen = .sideLevels })
             case .side:
                 OtherHallwayLevelView(onExit: { screen = .sideLevels })
             case .difficulty:
@@ -112,7 +116,11 @@ struct ContentView: View {
             case .level(6):
                 AuntieLevelView(onExit: { screen = .title }, onNext: play)
             case .level(7):
-                BackyardLevelView(onExit: { screen = .title }, onNext: play)
+                BackyardLevelView(onExit: { screen = .title }, onNext: { screen = .level(8) })
+            case .level(8):
+                GrandmaLevelView(onExit: { screen = .title }, onNext: { screen = .level(9) })
+            case .level(9):
+                RaidLevelView(onExit: { screen = .title }, onNext: play)
             case .level:
                 FitToPhone(night: true) { LevelSelectView(onPick: { screen = .level($0) }, onBack: { screen = .title }) }
             }
@@ -128,7 +136,19 @@ struct ContentView: View {
             }
         }
         .animation(.spring(duration: 0.4), value: game.badgeToast)
+        .overlay(alignment: .bottom) {
+            if let amount = game.moonlightToast {
+                MoonlightToast(amount: amount)
+                    .scaleEffect(Device.isPhone ? 0.6 : 1, anchor: .bottom)
+                    .padding(.bottom, Device.isPhone ? 20 : 40)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.spring(duration: 0.4), value: game.moonlightToast)
         .environment(game)
+        .onChange(of: screen) { updatePracticeLock() }
+        .onChange(of: Settings.shared.difficulty) { updatePracticeLock() }
         .onAppear {
             #if DEBUG
             // Test builds on GitHub's Mac: draw the characters to pictures, or open a level straight away.
@@ -141,6 +161,15 @@ struct ContentView: View {
             game.awardLaunchBadges()
             game.note(saveFiles: GameState.slots.count)
             SoundPlayer.shared.startMusic()
+        }
+    }
+
+    /// No Mercy: practice mode stays off in a story level until you've won it on No Mercy.
+    private func updatePracticeLock() {
+        if case .level(let n) = screen, Difficulty.current == .noMercy {
+            Settings.shared.practiceLocked = !(game.beatenOn[n] ?? []).contains(Difficulty.noMercy.rawValue)
+        } else {
+            Settings.shared.practiceLocked = false
         }
     }
 

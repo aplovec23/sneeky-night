@@ -83,6 +83,7 @@ struct GuideView: View {
     var walking = false
     /// His face right now. Nil: his usual face (picked in Customize the Guide).
     var expression: Mood?
+    var facing: Facing?
 
     /// The look you gave him, always with his hat on (and none of your boosts).
     static func dressed(_ look: Look) -> Look {
@@ -94,8 +95,8 @@ struct GuideView: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            CharacterView(look: Self.dressed(game.guideLook), facingRight: true, walking: walking, expression: expression)
-            // His lantern
+            CharacterView(look: Self.dressed(game.guideLook), facingRight: true, walking: walking, expression: expression, facing: facing)
+            // His lantern (hidden behind him when he walks away from you)
             VStack(spacing: 0) {
                 Rectangle().fill(Color(white: 0.3)).frame(width: 3, height: 14)
                 RoundedRectangle(cornerRadius: 5)
@@ -105,6 +106,7 @@ struct GuideView: View {
                     .shadow(color: .yellow, radius: 10)
             }
             .offset(x: 14, y: -34)
+            .opacity(facing == .north ? 0 : 1)
         }
         .frame(width: 100, height: 160)
     }
@@ -116,7 +118,7 @@ struct GuideWalker: View {
 
     var body: some View {
         if let spot = engine.guidePos {
-            GuideView(walking: engine.guideWalking)
+            GuideView(walking: engine.guideWalking, facing: engine.guideFacing)
                 .scaleEffect(x: engine.guideFacingRight ? 0.92 : -0.92, y: 0.92, anchor: .bottom)
                 .opacity(0.92)
                 .anchored(at: spot)
@@ -144,7 +146,7 @@ struct GuideCard: View {
 
     var body: some View {
         let real = tips.isEmpty ? Self.general : [Self.general[0]] + tips + [Self.general[4]]
-        // No Mercy: every third thing he says is wrong.
+        // No Mercy: every third thing he says is wrong, and he doesn't let on.
         let wrong = Difficulty.current == .noMercy && index % 3 == 2
         let all = wrong ? GuideTips.mistakes : real
         Button {
@@ -157,7 +159,7 @@ struct GuideCard: View {
                     .scaleEffect(0.42)
                     .frame(width: 46, height: 70)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(wrong ? "GUIDE  ·  hmm..." : "GUIDE  ·  tip \(index % real.count + 1) of \(real.count)  ·  tap for the next")
+                    Text("GUIDE  ·  tip \(index % real.count + 1) of \(real.count)  ·  tap for the next")
                         .font(.game(11, .heavy))
                         .foregroundStyle(Color(red: 0.45, green: 0.25, blue: 0.75))
                     Text(all[index % all.count])
@@ -211,7 +213,11 @@ struct PauseOverlay: View {
                         Toggle("Practice mode", isOn: $settings.practice)
                             .font(.game(24))
                             .tint(Palette.button)
-                        Text("The Guide helps you through the level, and Mom and Dad can't catch you. Turn it off when you're ready.")
+                            .disabled(settings.practiceLocked)
+                            .opacity(settings.practiceLocked ? 0.5 : 1)
+                        Text(settings.practiceLocked
+                             ? "Locked on No Mercy until you win this level on No Mercy. No help this time!"
+                             : "The Guide helps you through the level, and Mom and Dad can't catch you. Turn it off when you're ready.")
                             .font(.game(15, .medium))
                             .foregroundStyle(.white.opacity(0.75))
                             .fixedSize(horizontal: false, vertical: true)

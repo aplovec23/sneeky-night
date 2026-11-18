@@ -25,6 +25,7 @@ SN.Level3 = class {
     e.onInteract = i => this.interact(i);
     e.onDefaultInteract = () => this.defaultAction();
     e.onHazard = i => this.bumped(i);
+    e.onPuddle = () => this.splashed();
     e.onTimeUp = () => this.momWakes(false);
     e.onTooLoud = () => this.momWakes(true);
     e.onConfirm = () => this.popup && this.popup.action();
@@ -81,7 +82,7 @@ SN.Level3 = class {
     const boxes = SN.shuffle(L.lockboxSpots).slice(0, 3);
     const keep = list => list.filter(t => !t.id.startsWith('lockbox') || boxes.includes(t.id));
     this.saved = {
-      stairs: L.stairsThings(), downstairs: keep(L.downstairsThings()), garage: keep(L.garageThings()), basement: keep(L.basementThings()),
+      stairs: L.stairsThings().concat(SN.Level2.puddles([[680, 600]])), downstairs: keep(L.downstairsThings()).concat(SN.Level2.puddles([[1320, 650], [2060, 600]])), garage: keep(L.garageThings()), basement: keep(L.basementThings()),
       yard: L.yardThings(), hallway: L.hallwayThings(), brother: SN.Level2.siblingRoom(), mom: L.momRoomThings(), roof: L.roofThings(),
     };
     this.room = 'stairs';
@@ -712,6 +713,12 @@ SN.Level3 = class {
 
   // ---------- Getting caught ----------
   /// Bumping something makes a noise, and Mom gets up to see what it was.
+  /// No Mercy: a splash in a puddle wakes Mom.
+  splashed() {
+    if (this.phase !== 'sneaking' || this.chase.active || this.momDeleted) return;
+    this.chase.alarm('mom', 'SPLASH! You stepped in a puddle. Mom heard it!');
+  }
+
   bumped(i) {
     const e = this.engine, hazard = e.things[i].hazard;
     if (hazard === 'toy') this.award('deadlySqueak');
@@ -862,6 +869,7 @@ SN.Level3 = class {
       const x = th.x, y = th.y;
       switch (th.kind) {
         case 'plank': P.plank(ctx, x, y, th.fw, th.fh); break;
+        case 'puddle': P.puddle(ctx, x, y, th.fw, th.fh, t); break;
         case 'starBall': P.starBall(ctx, x, y, t); break;
         case 'boostBall': P.boostBall(ctx, x, y, t); break;
         case 'goldenStick': P.goldenStick(ctx, x, y, t); break;

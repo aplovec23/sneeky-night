@@ -178,7 +178,7 @@ struct RoomLevelView: View {
                 let fresh = !game.hasGoldenStick
                 game.hasGoldenStick = true
                 game.award(.goldenStick)
-                game.completedSide.insert(6)
+                game.finishSide(6)
                 return fresh
             }
             model.belt.configure(game: game, engine: model.engine)

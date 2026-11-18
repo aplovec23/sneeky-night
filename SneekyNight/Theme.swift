@@ -11,12 +11,13 @@ extension Font {
 enum Palette {
     private static func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
 
-    // The whole game is tinted by the sky: night, sunrise, day or sunset (Settings, or the real clock).
+    // The whole game is tinted by the sky: night, sunrise, day, afternoon or sunset (Settings, or the real clock).
     static var skyTop: Color {
         switch Settings.shared.sky {
         case .night: rgb(0.05, 0.06, 0.20)
         case .dawn: rgb(0.35, 0.50, 0.80)
         case .day: rgb(0.25, 0.58, 0.95)
+        case .afternoon: rgb(0.30, 0.55, 0.90)
         case .dusk: rgb(0.22, 0.18, 0.48)
         }
     }
@@ -25,6 +26,7 @@ enum Palette {
         case .night: rgb(0.22, 0.13, 0.40)
         case .dawn: rgb(0.98, 0.65, 0.45)
         case .day: rgb(0.66, 0.86, 1.0)
+        case .afternoon: rgb(1.0, 0.84, 0.60)
         case .dusk: rgb(0.95, 0.48, 0.36)
         }
     }
@@ -34,6 +36,7 @@ enum Palette {
         case .night: rgb(1.0, 0.95, 0.75)
         case .dawn: rgb(1.0, 0.85, 0.35)
         case .day: rgb(1.0, 0.93, 0.45)
+        case .afternoon: rgb(1.0, 0.86, 0.42)
         case .dusk: rgb(1.0, 0.62, 0.30)
         }
     }
@@ -43,6 +46,7 @@ enum Palette {
         case .night: rgb(0.02, 0.02, 0.12)
         case .dawn: rgb(1.0, 0.75, 0.45)
         case .day: rgb(1.0, 0.97, 0.80)
+        case .afternoon: rgb(1.0, 0.85, 0.55)
         case .dusk: rgb(0.55, 0.20, 0.25)
         }
     }
@@ -51,6 +55,7 @@ enum Palette {
         case .night: 1
         case .dawn: 0.3
         case .day: 0.12
+        case .afternoon: 0.18
         case .dusk: 0.5
         }
     }
@@ -60,6 +65,7 @@ enum Palette {
         case .night: 1
         case .dawn: 0.25
         case .day: 0
+        case .afternoon: 0
         case .dusk: 0.45
         }
     }

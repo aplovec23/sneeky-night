@@ -15,6 +15,7 @@ SN.Level2 = class {
     const e = this.engine, c = this.chase;
     e.onInteract = i => this.interact(i);
     e.onHazard = i => this.bumped(i);
+    e.onPuddle = () => this.splashed();
     e.onTimeUp = () => this.momWakes(false);
     e.onTooLoud = () => this.momWakes(true);
     e.onShieldUsed = () => this.inventory = this.inventory.filter(i => i.id !== 'silentSlippers');
@@ -54,10 +55,11 @@ SN.Level2 = class {
     this.code = SN.pick(SN.Level2.codes);
     this.paperBox = SN.pick(['box1', 'box2', 'box3', 'box4']);
     this.paperFound = false; this.boxChecks = 0; this.windowViews = 0;
-    this.saved = { sibling: SN.Level2.siblingRoom(), mom: SN.Level2.momRoom() };
+    const L = SN.Level2;
+    this.saved = { sibling: L.siblingRoom().concat(L.puddles([[880, 620]])), mom: L.momRoom().concat(L.puddles([[1010, 660]])) };
     this.room = 'hallway';
     const e = this.engine;
-    e.load({ width: 3400, floor: [545, 690], things: SN.Level2.hallway(), spawn: { x: 220, y: 610 } });
+    e.load({ width: 3400, floor: [545, 690], things: L.hallway().concat(L.puddles([[980, 655], [1960, 600], [2650, 670]])), spawn: { x: 220, y: 610 } });
     e.timeLeft = SN.levelTime(2); e.timerOn = true; e.resetNoise(); e.noiseFactor = 1;
     e.speedBoost = false; e.jumpBoost = false; e.shields = 0; e.runHeld = false; e.speedBonus = 0;
     e.crouching = false; e.facingRight = true; e.bubble = null;
@@ -74,6 +76,11 @@ SN.Level2 = class {
   // ---------- Rooms ----------
   static onWall(id, kind, x, prompt, reach = 70) { return SN.thing({ id, kind, x, y: 545, prompt, reachW: reach, reachH: 160 }); }
   static box(id, x, y) { return SN.thing({ id, kind: 'box', x, y, fw: 72, fh: 30, solid: true, movable: true, prompt: 'Search the box', reachW: 100, reachH: 60 }); }
+  /// No Mercy only: water puddles on the floor. Wading slows you down, and the splash wakes Mom.
+  static puddles(spots) {
+    if (SN.difficulty.current !== 4) return [];
+    return spots.map(([x, y], n) => SN.thing({ id: 'puddle' + n, kind: 'puddle', x, y, fw: 110, fh: 34, flat: true }));
+  }
   static obstacle(id, hazard, x, y, w, h) { return SN.thing({ id, kind: id.replace(/\d/g, ''), x, y, fw: w, fh: h, hazard }); }
 
   static hallway() {
@@ -218,7 +225,7 @@ SN.Level2 = class {
       return;
     }
     const nextSkill = ['dash', 'run'].find(s => !this.game.skills.includes(s));
-    if (this.boxChecks % 4 === 0 && nextSkill) {
+    if (this.boxChecks >= 2 && nextSkill) {
       SN.sound.play('magic');
       const how = nextSkill === 'dash' ? 'Press Q (or the wind button) to zoom forward!' : 'Hold Shift (or turn on the running button) to run fast. Running is noisy, so be careful!';
       this.show({ title: 'Skill paper!', message: `You learned ${nextSkill.toUpperCase()}!\n${how}`, symbol: nextSkill === 'dash' ? '💨' : '🏃', color: '#32ade6', button: 'Cool!',
@@ -227,7 +234,7 @@ SN.Level2 = class {
     }
     const loot = this.game.rollLoot();
     if (loot) { SN.sound.play('magic'); this.show(SN.lootPopup(loot, () => this.game.take(loot))); return; }
-    if (this.boxChecks % 4 === 2 && nextSkill) e.say('Hmm... something rustles at the bottom. Keep checking the boxes!');
+    if (this.boxChecks === 1 && nextSkill) e.say('Hmm... something rustles at the bottom. Keep checking the boxes!');
     else e.say(SN.pick(['Just old clothes.', 'Only some books in here.', 'Lots of tangled wires.', 'A rubber chicken? Weird.']));
   }
 
@@ -420,6 +427,12 @@ SN.Level2 = class {
 
   // ---------- Getting caught ----------
   /// Bumping something makes a noise, and Mom gets up to see what it was.
+  /// No Mercy: a splash in a puddle wakes Mom.
+  splashed() {
+    if (this.phase !== 'sneaking' || this.chase.active) return;
+    this.chase.alarm('mom', 'SPLASH! You stepped in a puddle. Mom heard it!');
+  }
+
   bumped(i) {
     const e = this.engine, hazard = e.things[i].hazard;
     if (hazard === 'toy') this.award('deadlySqueak');
@@ -530,6 +543,7 @@ SN.Level2 = class {
       const x = th.x, y = th.y;
       switch (th.kind) {
         case 'box': P.box(ctx, x, y + th.fh / 2, th.open); break;
+        case 'puddle': P.puddle(ctx, x, y, th.fw, th.fh, t); break;
         case 'chair': P.chair(ctx, x, y + 8); break;
         case 'lamp': P.floorLamp(ctx, x, y + 6); break;
         case 'table': P.sideTable(ctx, x, y + 14); break;

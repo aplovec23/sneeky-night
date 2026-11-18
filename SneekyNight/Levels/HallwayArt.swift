@@ -421,6 +421,11 @@ struct MomView: View {
 
     /// Mom's pink dressing gown. Auntie wears the same cut in teal.
     var robe = Color(red: 0.85, green: 0.45, blue: 0.60)
+    /// Grandma uses this drawing too: white hair, and no curlers.
+    var hair = Color(red: 0.45, green: 0.28, blue: 0.15)
+    var curlers = true
+    /// South: facing you. North: her back (walking away up the room). East or west: looking that way.
+    var facing: Facing = .south
     private let skin = Color(red: 0.96, green: 0.80, blue: 0.66)
 
     var body: some View {
@@ -456,14 +461,22 @@ struct MomView: View {
             .offset(y: 118)
             // Head with curlers
             Circle().fill(skin).frame(width: 62).offset(y: -62)
-            Circle().trim(from: 0.5, to: 1).fill(Color(red: 0.45, green: 0.28, blue: 0.15)).frame(width: 68).offset(y: -66)
-            HStack(spacing: 4) {
-                ForEach(0..<4, id: \.self) { _ in
-                    Capsule().fill(Color.cyan).frame(width: 12, height: 18)
+            Circle().trim(from: 0.5, to: 1).fill(hair).frame(width: 68).offset(y: -66)
+            if curlers {
+                HStack(spacing: 4) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        Capsule().fill(Color.cyan).frame(width: 12, height: 18)
+                    }
                 }
+                .offset(y: -100)
             }
-            .offset(y: -100)
-            GrownUpFace(mood: stunned ? .surprised : expression, gap: 22, phase: 1.3).offset(y: -62)
+            if facing == .north {
+                // The back of her head.
+                Circle().fill(hair).frame(width: 64).offset(y: -62)
+            } else {
+                GrownUpFace(mood: stunned ? .surprised : expression, gap: 22, phase: 1.3)
+                    .offset(x: facing == .east ? 9 : facing == .west ? -9 : 0, y: -62)
+            }
             if stunned {
                 StunStars().offset(y: -112)
             } else if expression == .cross || expression == .surprised {
@@ -740,5 +753,25 @@ struct ToyRobotView: View {
             .frame(width: 44, height: 64)
         }
         .frame(width: 44, height: 64)
+    }
+}
+
+/// No Mercy: a puddle of water on the floor, with a little shine and slow ripples.
+struct PuddleView: View {
+    let size: CGSize
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 15)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            ZStack {
+                LavaBlob(wobble: 2).fill(Color(red: 0.30, green: 0.55, blue: 0.85).opacity(0.75)).frame(width: size.width, height: size.height)
+                LavaBlob(wobble: 4).fill(Color(red: 0.55, green: 0.78, blue: 1).opacity(0.55)).frame(width: size.width * 0.75, height: size.height * 0.6)
+                Ellipse().stroke(.white.opacity(0.5 * (1 - (t * 0.5).truncatingRemainder(dividingBy: 1))), lineWidth: 1.5)
+                    .frame(width: size.width * 0.3 + CGFloat((t * 0.5).truncatingRemainder(dividingBy: 1)) * size.width * 0.5,
+                           height: size.height * 0.2 + CGFloat((t * 0.5).truncatingRemainder(dividingBy: 1)) * size.height * 0.5)
+                Capsule().fill(.white.opacity(0.6)).frame(width: size.width * 0.18, height: 3).offset(x: -size.width * 0.18, y: -size.height * 0.15)
+            }
+            .frame(width: size.width, height: size.height)
+        }
     }
 }
