@@ -28,7 +28,24 @@ enum DebugSnapshots {
     }
 
     /// More sheets can be added here while working on something.
-    static var extraSheets: [(String, AnyView)] { [] }
+    static var extraSheets: [(String, AnyView)] { [("dreams", AnyView(dreams))] }
+
+    /// Six dream backgrounds (made from six seeds) and a few random dream names.
+    static var dreams: some View {
+        sheet("Dream backgrounds and names") {
+            ForEach([11, 2024, 777, 31337, 90210, 123456], id: \.self) { seed in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("seed \(seed)").font(.system(size: 12)).foregroundStyle(.black)
+                    DreamBackdrop(seed: seed, width: 1800)
+                        .scaleEffect(0.5, anchor: .topLeading)
+                        .frame(width: 900, height: 350, alignment: .topLeading)
+                        .clipped()
+                }
+            }
+            Text((0..<12).map { _ in DreamMaker.randomName() }.joined(separator: "  ·  "))
+                .font(.system(size: 13)).foregroundStyle(.black).frame(width: 900, alignment: .leading)
+        }
+    }
 
     private static func save<V: View>(_ view: V, _ name: String, _ dir: URL, _ game: GameState) {
         let renderer = ImageRenderer(content: view.environment(game))

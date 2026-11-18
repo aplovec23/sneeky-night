@@ -29,6 +29,8 @@ struct CustomLevel: Codable, Identifiable, Equatable {
     ]
     /// Creative mode (admin panel, crown, immortality) while playing this level. Optional so older saved levels still load.
     var creative: Bool?
+    /// Dreams only: the number their background is generated from (`DreamBackdrop`).
+    var dreamSeed: Int?
 
     /// There's no limit any more: place as many objects and hazards as you like, and make the level as long as you like.
     static let themes = ["Hallway", "Dungeon", "Hotel", "Street"]
@@ -193,12 +195,23 @@ struct GhostView: View {
                 UnevenRoundedRectangle(topLeadingRadius: 40, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 40)
                     .fill(.white.opacity(0.85))
                     .frame(width: 80, height: 118)
-                HStack(spacing: 14) {
-                    Ellipse().fill(Color(white: 0.15)).frame(width: 12, height: 18)
-                    Ellipse().fill(Color(white: 0.15)).frame(width: 12, height: 18)
+                // A friendly face: shiny eyes, rosy cheeks and a smile (not hollow eyes and an open mouth).
+                HStack(spacing: 16) {
+                    ForEach(0..<2, id: \.self) { _ in
+                        ZStack {
+                            Ellipse().fill(Color(white: 0.18)).frame(width: 10, height: 13)
+                            Circle().fill(.white).frame(width: 4).offset(x: 1.5, y: -3)
+                        }
+                    }
                 }
                 .offset(y: -22)
-                Ellipse().fill(Color(white: 0.2)).frame(width: 14, height: 10).offset(y: 4)
+                HStack(spacing: 34) {
+                    Circle().fill(Color.pink.opacity(0.35)).frame(width: 9)
+                    Circle().fill(Color.pink.opacity(0.35)).frame(width: 9)
+                }
+                .offset(y: -10)
+                Circle().trim(from: 0.1, to: 0.4).stroke(Color(white: 0.25), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .frame(width: 16).offset(y: -6)
             }
             .shadow(color: .white.opacity(0.7), radius: 12)
             .offset(y: -24 + bob)
@@ -1073,7 +1086,11 @@ struct CustomLevelStage: View {
 
     private var world: some View {
         ZStack(alignment: .topLeading) {
-            CustomBackdrop(theme: model.level.theme, width: CGFloat(model.level.width))
+            if dream, let seed = model.level.dreamSeed {
+                DreamBackdrop(seed: seed, width: CGFloat(model.level.width))
+            } else {
+                CustomBackdrop(theme: model.level.theme, width: CGFloat(model.level.width))
+            }
             ForEach(engine.things.filter { !$0.onFloor }) { thing in
                 CustomItemArt(kind: thing.kind, open: model.doorOpen, hiding: model.hidingIn == thing.id)
                     .anchored(at: thing.pos)

@@ -54,16 +54,10 @@ struct LevelScaffold<World: View, Extra: View>: View {
             ZStack {
                 Color.black
                 VStack(spacing: 0) {
-                    ZStack(alignment: .topLeading) {
-                        world()
-                        GuideWalker(engine: engine).allowsHitTesting(false)
-                        bubble
-                    }
-                    .frame(width: engine.width, height: engine.height, alignment: .topLeading)
-                    .offset(x: -engine.camera, y: -Self.cropTop - engine.cameraY)
-                    .frame(width: shown, height: Self.stageHeight, alignment: .topLeading)
-                    .clipped()
-                    .overlay { AmbientLayer().allowsHitTesting(false) }
+                    // The room is its own view: it redraws every frame as things move, and the top bar,
+                    // buttons and joystick around it don't have to.
+                    CameraStage(engine: engine, shown: shown, cropTop: Self.cropTop, stageHeight: Self.stageHeight, world: world)
+                        .overlay { AmbientLayer().allowsHitTesting(false) }
                     .scaleEffect(scale)
                     .frame(width: shown * scale, height: Self.stageHeight * scale)
                     .overlay(alignment: phone ? .top : .bottomLeading) {
@@ -79,7 +73,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                         }
                     }
                     if !phone {
-                        controls
+                        LevelControls(engine: engine, belt: belt, k: Self.k)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(LinearGradient(colors: [Color(red: 0.13, green: 0.10, blue: 0.24), Color(red: 0.05, green: 0.04, blue: 0.11)],
                                                        startPoint: .top, endPoint: .bottom))
@@ -94,7 +88,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                         topBar
                         VStack {
                             Spacer()
-                            controls
+                            LevelControls(engine: engine, belt: belt, k: Self.k)
                                 .opacity(0.6)
                                 .padding(.bottom, 16)
                         }
@@ -191,17 +185,6 @@ struct LevelScaffold<World: View, Extra: View>: View {
         }
     }
 
-    @ViewBuilder private var bubble: some View {
-        if let text = engine.bubble {
-            SpeechBubble(text: text, tint: Palette.gold)
-                .position(x: min(max(engine.player.x, engine.camera + 170), engine.camera + max(engine.viewWidth, 340) - 170),
-                          y: max(engine.player.y - engine.z - 220, engine.cameraY + 190))
-                .id(engine.bubbleID)
-                .transition(.scale.combined(with: .opacity))
-                .animation(.spring(duration: 0.3), value: engine.bubbleID)
-        }
-    }
-
     private var topBar: some View {
         VStack {
             HStack(spacing: 14) {
@@ -215,11 +198,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
                     .padding(.horizontal, 22)
                     .padding(.vertical, 10)
                     .background(.black.opacity(0.45), in: Capsule())
-                VStack(spacing: 6) {
-                    if engine.showsClock { TimerBadge(seconds: engine.timeLeft) }
-                    if engine.usesHP { HealthBar(hp: engine.hp, max: engine.maxHP) }
-                    NoiseMeter(level: engine.noise)
-                }
+                LevelGauges(engine: engine)
                 Spacer()
                 if engine.creative {
                     RoundIconButton(symbol: "wand.and.stars", key: GameKey.admin.label) {
@@ -243,11 +222,94 @@ struct LevelScaffold<World: View, Extra: View>: View {
         .padding(24)
     }
 
-    private var controls: some View {
-        let k = Self.k
+    private var backpack: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "backpack.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(.white.opacity(0.8))
+            ForEach(0..<max(3, inventory.count), id: \.self) { i in
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.white.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    if i < inventory.count {
+                        let item = inventory[i]
+                        Image(systemName: item.symbol)
+                            .font(.system(size: 21, weight: .bold))
+                            .foregroundStyle(item.color)
+                            .transition(.scale)
+                            .onTapGesture { onInventoryTap(item) }
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
+        .animation(.spring(duration: 0.4, bounce: 0.5), value: inventory)
+    }
+}
+
+/// The room inside the camera: the level's world, the Guide and your speech bubble, moved so
+/// you stay in view. It's its own view so that it can redraw every frame on its own.
+private struct CameraStage<World: View>: View {
+    let engine: GameEngine
+    let shown: CGFloat
+    let cropTop: CGFloat
+    let stageHeight: CGFloat
+    @ViewBuilder let world: () -> World
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            world()
+            GuideWalker(engine: engine).allowsHitTesting(false)
+            PlayerBubble(engine: engine)
+        }
+        .frame(width: engine.width, height: engine.height, alignment: .topLeading)
+        .offset(x: -engine.camera, y: -cropTop - engine.cameraY)
+        .frame(width: shown, height: stageHeight, alignment: .topLeading)
+        .clipped()
+    }
+}
+
+/// What you're saying, above your head (kept on the screen).
+private struct PlayerBubble: View {
+    let engine: GameEngine
+
+    var body: some View {
+        if let text = engine.bubble {
+            SpeechBubble(text: text, tint: Palette.gold)
+                .position(x: min(max(engine.player.x, engine.camera + 170), engine.camera + max(engine.viewWidth, 340) - 170),
+                          y: max(engine.player.y - engine.z - 220, engine.cameraY + 190))
+                .id(engine.bubbleID)
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(duration: 0.3), value: engine.bubbleID)
+        }
+    }
+}
+
+/// The clock, the health bar and the noise meter. They only change when the numbers they show do.
+private struct LevelGauges: View {
+    let engine: GameEngine
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if engine.showsClock { TimerBadge(seconds: Double(engine.clockSeconds)) }
+            if engine.usesHP { HealthBar(hp: engine.hp, max: engine.maxHP) }
+            NoiseMeter(level: Double(engine.noiseShown))
+        }
+    }
+}
+
+/// The joystick, the action buttons and the item buttons along the bottom.
+private struct LevelControls: View {
+    let engine: GameEngine
+    let belt: ItemBelt?
+    let k: CGFloat
+
+    var body: some View {
         // Settings can swap the sides: joystick on the right, buttons on the left.
-        return HStack(alignment: .center) {
-            if engine.player2 != nil {
+        HStack(alignment: .center) {
+            if engine.multiplayer {
                 // Two players: player 1's joystick on the far left, player 2's on the far right.
                 Joystick(engine: engine, k: k)
                 Spacer()
@@ -264,7 +326,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
             }
         }
         .padding(.horizontal, 24)
-        .animation(.easeInOut(duration: 0.15), value: currentPrompt)
+        .animation(.easeInOut(duration: 0.15), value: engine.prompt)
     }
 
     /// Player 2's own joystick and "use" button, on the right-hand side of the screen.
@@ -286,7 +348,7 @@ struct LevelScaffold<World: View, Extra: View>: View {
             let items = ItemBelt.Item.allCases.filter { belt.owned.contains($0) }
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(62 * k), spacing: 8), count: items.count > 4 ? 3 : items.count > 2 ? 2 : max(items.count, 1)), spacing: 6) {
                 ForEach(items, id: \.self) { item in
-                    let wait = belt.cooldowns[item] ?? 0
+                    let wait = belt.waits[item] ?? 0
                     ActionButton(key: item.key, symbol: item.symbol, size: (items.count > 2 ? 56 : 62) * k,
                                  color: wait > 0 || (item == .hat && !belt.hatOn) ? Color(white: 0.3) : item.color) { belt.use(item) }
                         .overlay {
@@ -295,12 +357,12 @@ struct LevelScaffold<World: View, Extra: View>: View {
                                     .offset(y: 22)
                             } else if item == .cloud && engine.flying {
                                 Text("\(Int(engine.flyLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.white)
-                            } else if item == .lightning && belt.lightningLeft > 0 {
-                                Text("\(Int(belt.lightningLeft.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.yellow)
+                            } else if item == .lightning && belt.lightningShown > 0 {
+                                Text("\(belt.lightningShown)").font(.game(22, .heavy)).foregroundStyle(.yellow)
                             } else if item == .stick && wait > 0 {
                                 Text("USED").font(.game(14, .heavy)).foregroundStyle(.white.opacity(0.85)).offset(y: 22)
                             } else if wait > 0 {
-                                Text("\(Int(wait.rounded(.up)))").font(.game(22, .heavy)).foregroundStyle(.white)
+                                Text("\(wait)").font(.game(22, .heavy)).foregroundStyle(.white)
                             }
                         }
                 }
@@ -333,9 +395,9 @@ struct LevelScaffold<World: View, Extra: View>: View {
             }
             ActionButton(key: GameKey.jump.label, symbol: "arrow.up", size: 82 * k, color: .blue, action: engine.jump)
             ActionButton(key: GameKey.use.label, symbol: "hand.raised.fill", size: 100 * k,
-                         color: currentPrompt == nil ? .gray : Palette.button, action: engine.interact)
+                         color: engine.prompt == nil ? .gray : Palette.button, action: engine.interact)
                 .overlay(alignment: Settings.shared.swapSides ? .topLeading : .topTrailing) {
-                    if let prompt = currentPrompt {
+                    if let prompt = engine.prompt {
                         Text("\(GameKey.use.label) · \(prompt)")
                             .font(.game(20))
                             .foregroundStyle(.black)
@@ -351,37 +413,6 @@ struct LevelScaffold<World: View, Extra: View>: View {
         }
     }
 
-    /// What E will do right now: the thing you're next to, or the level's stand-anywhere action.
-    private var currentPrompt: String? {
-        if let i = engine.nearest, i < engine.things.count { return engine.things[i].prompt }
-        return engine.hidden ? nil : engine.defaultPrompt
-    }
-
-    private var backpack: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "backpack.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.8))
-            ForEach(0..<max(3, inventory.count), id: \.self) { i in
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.white.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    if i < inventory.count {
-                        let item = inventory[i]
-                        Image(systemName: item.symbol)
-                            .font(.system(size: 21, weight: .bold))
-                            .foregroundStyle(item.color)
-                            .transition(.scale)
-                            .onTapGesture { onInventoryTap(item) }
-                    }
-                }
-            }
-        }
-        .padding(8)
-        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 16))
-        .animation(.spring(duration: 0.4, bounce: 0.5), value: inventory)
-    }
 }
 
 /// Shows how close you are to waking someone up. Hidden when it's quiet.
@@ -551,7 +582,7 @@ struct PlayerSprite: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 3)
                     .background(.black.opacity(0.4), in: Capsule())
-                    .opacity(Settings.shared.nameTag ? 1 : 0)
+                    .opacity(Settings.shared.nameTag && !name.isEmpty ? 1 : 0)
                 CharacterView(look: look, facingRight: engine.facingRight,
                               walking: engine.walking && engine.z == 0,
                               crouching: engine.crouching || engine.ducking, taunting: engine.taunting,
@@ -577,7 +608,7 @@ struct PlayerSprite: View {
     private var mood: Mood? {
         if engine.hurt || engine.threat == 2 { return .scared }
         if engine.z > 40 && !engine.flying { return .surprised }
-        if engine.threat == 1 || engine.noise > 70 { return .worried }
+        if engine.threat == 1 || engine.noiseShown > 70 { return .worried }
         if engine.ducking || engine.coverY != nil { return .sneaky }
         if engine.sprinting || engine.flying { return .happy }
         return nil

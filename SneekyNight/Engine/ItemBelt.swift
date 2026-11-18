@@ -16,9 +16,23 @@ final class ItemBelt {
     }
 
     var owned: Set<Item> = []
-    var cooldowns: [Item: Double] = [:]
-    /// Seconds of lightning-ball power left.
-    var lightningLeft = 0.0
+    /// Seconds before each item can be used again. They change every frame, so the buttons watch
+    /// `waits` (whole seconds) instead, and only redraw once a second.
+    @ObservationIgnored var cooldowns: [Item: Double] = [:] {
+        didSet {
+            let shown = cooldowns.compactMapValues { $0 > 0 ? Int($0.rounded(.up)) : nil }
+            if shown != waits { waits = shown }
+        }
+    }
+    var waits: [Item: Int] = [:]
+    /// Seconds of lightning-ball power left (the button shows `lightningShown`).
+    @ObservationIgnored var lightningLeft = 0.0 {
+        didSet {
+            let shown = Int(lightningLeft.rounded(.up))
+            if shown != lightningShown { lightningShown = shown }
+        }
+    }
+    var lightningShown = 0
     /// The Guide's Hat is switched on (H): everything ×10.5 and you walk through things.
     var hatOn = false
 

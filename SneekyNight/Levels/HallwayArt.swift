@@ -512,14 +512,22 @@ struct GrownUpFace: View {
     }
 
     private func face(blink: Bool) -> some View {
-        // Eyes: wider when surprised or scared, half shut when sleepy, narrow when sneaky.
-        let tall: CGFloat = blink ? max(1.5, size * 0.22) : mood == .surprised || mood == .scared ? size * 1.35 : mood == .sleepy ? size * 0.35 : mood == .sneaky ? size * 0.55 : size
-        let tilt: Double = mood == .worried || mood == .scared ? -16 : mood == .cross ? 18 : mood == .sneaky ? 8 : 0
-        let lift: CGFloat = mood == .surprised ? -5 : mood == .scared ? -3 : 0
+        // Eyes: a touch wider when surprised or scared (with a shine, never a stare), half shut when
+        // sleepy, narrow when sneaky.
+        let wide = mood == .surprised || mood == .scared
+        let tall: CGFloat = blink ? max(1.5, size * 0.22) : wide ? size * 1.12 : mood == .sleepy ? size * 0.35 : mood == .sneaky ? size * 0.55 : size
+        let tilt: Double = mood == .worried ? -10 : mood == .scared ? -12 : mood == .cross ? 13 : mood == .sneaky ? 6 : 0
+        let lift: CGFloat = mood == .surprised ? -3 : mood == .scared ? -2 : 0
         return ZStack {
             ForEach([-1.0, 1.0], id: \.self) { side in
-                Capsule().fill(.black).frame(width: size, height: tall).offset(x: side * gap / 2)
-                Capsule().fill(brows).frame(width: size * 2, height: 3)
+                ZStack {
+                    Capsule().fill(Color(white: 0.08)).frame(width: size, height: tall)
+                    if !blink && tall > size * 0.5 {
+                        Circle().fill(.white).frame(width: max(2, size * 0.32)).offset(x: size * 0.15, y: -tall / 4)
+                    }
+                }
+                .offset(x: side * gap / 2)
+                Capsule().fill(brows).frame(width: size * 1.8, height: 2.5)
                     .rotationEffect(.degrees(side * tilt * -1))
                     .offset(x: side * gap / 2, y: -size - 4 + lift - browRise)
             }
@@ -537,7 +545,8 @@ struct GrownUpFace: View {
             Circle().trim(from: 0.6, to: 0.9).stroke(.black.opacity(0.7), style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .frame(width: w).offset(y: w / 2 + 2)
         case .scared, .surprised:
-            Ellipse().fill(Color(red: 0.35, green: 0.10, blue: 0.12)).frame(width: w * 0.5, height: mood == .scared ? w * 0.55 : w * 0.45)
+            // A small round "oh", not a gaping mouth.
+            Ellipse().fill(Color(red: 0.62, green: 0.28, blue: 0.30)).frame(width: w * 0.32, height: w * 0.36)
         case .sneaky:
             Capsule().fill(.black.opacity(0.7)).frame(width: w * 0.65, height: 3).rotationEffect(.degrees(-10)).offset(x: 3)
         case .sleepy:

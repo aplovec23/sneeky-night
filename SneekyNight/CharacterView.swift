@@ -35,7 +35,7 @@ struct CharacterView: View {
                 pose(at: frozenTime)
             } else {
                 // Always a little alive: standing still you breathe, sway and look about; moving runs at full speed.
-                TimelineView(.animation(minimumInterval: walking || taunting ? nil : 1 / 30)) { ctx in
+                TimelineView(.animation(minimumInterval: walking || taunting ? nil : 1 / 20)) { ctx in
                     pose(at: ctx.date.timeIntervalSinceReferenceDate)
                 }
             }
@@ -75,22 +75,34 @@ struct CharacterView: View {
         .rotationEffect(.degrees(angle), anchor: .top)
     }
 
-    private func arm(_ angle: Double) -> some View {
+    // The character is drawn turned a little toward the way they face (facing right; the whole
+    // figure is mirrored to face left). So the near arm hangs on the facing side of the body, in
+    // front of it, and the far arm on the other side, behind it.
+    static let nearShoulder: CGFloat = 64
+    static let farShoulder: CGFloat = 36
+
+    /// An arm hanging from the shoulder (its top), turned `angle` degrees. The sleeve is a shade
+    /// darker than the shirt so the arm shows against it; the far arm is darker still.
+    private func arm(_ angle: Double, far: Bool) -> some View {
         VStack(spacing: -3) {
-            Capsule().fill(shirt).frame(width: 14, height: 36)
-            Circle().fill(skin).frame(width: 13, height: 13)
+            Capsule().fill(shirt).brightness(far ? -0.16 : -0.07).frame(width: 14, height: 36)
+            Circle().fill(skin).brightness(far ? -0.05 : 0).frame(width: 13, height: 13)
         }
         .rotationEffect(.degrees(angle), anchor: .top)
     }
 
-    /// A bent leg for crouching: thigh pointing forward, shin tucked under, slipper on the floor.
-    private func bentLeg(shuffle: Double) -> some View {
+    /// A bent leg for crouching: the hip under the body, the knee out in front, the shin going
+    /// down to the shoe, which stands on the floor line (y 150).
+    private func crouchLeg(hip: CGPoint, knee: CGPoint, foot: CGPoint, far: Bool) -> some View {
         ZStack {
-            Capsule().fill(trousers).brightness(trouserShade).frame(width: 34, height: 17).position(x: 20, y: 9)
-            Capsule().fill(trousers).brightness(trouserShade - 0.06).frame(width: 16, height: 24).position(x: 30 + shuffle, y: 22)
-            Capsule().fill(shoe).frame(width: 24, height: 11).position(x: 34 + shuffle, y: 34)
+            Path { p in p.move(to: hip); p.addLine(to: knee) }
+                .stroke(trousers, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                .brightness(trouserShade + (far ? -0.08 : 0))
+            Path { p in p.move(to: knee); p.addLine(to: foot) }
+                .stroke(trousers, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+                .brightness(trouserShade + (far ? -0.1 : -0.03))
+            Capsule().fill(shoe).brightness(far ? -0.06 : 0).frame(width: 24, height: 11).position(x: foot.x + 5, y: foot.y + 2.5)
         }
-        .frame(width: 50, height: 40)
     }
 
     private func figure(swing: Double, wiggle: Double, breath: Double, time: Double) -> some View {
@@ -100,18 +112,21 @@ struct CharacterView: View {
         // Crouching: hands out in front, creeping forward one after the other.
         // Scared: hands up by the face.
         let scared = mood == .scared && !taunting && !crouching
-        let backArm = taunting ? 160 + wiggle * 20 : crouching ? -48 + swing * 16 : scared ? -140 + idle * 6 : -swing * 30 + 4 + idle * 4
-        let frontArm = taunting ? -160 - wiggle * 20 : crouching ? -72 - swing * 16 : scared ? -150 - idle * 6 : swing * 30 - 4 - idle * 4
-        // Crouching is its own pose: knees bent, the upper body lowered and leaning forward,
-        // rising and sinking a little with each breath and each careful step.
-        // The slippers stay on the floor line (y 150, same as standing), so the feet never sink
-        // into the floor, and the body sits just on top of the bent knees.
-        let drop: CGFloat = crouching ? 24 + breath * 1.2 - abs(swing) * 2 : 0
+        let backArm = taunting ? 160 + wiggle * 20 : crouching ? -24 + swing * 12 : scared ? -120 + idle * 6 : -swing * 30 + 5 + idle * 4
+        let frontArm = taunting ? -160 - wiggle * 20 : crouching ? -42 - swing * 12 : scared ? -135 - idle * 6 : swing * 30 - 6 - idle * 4
+        // Crouching is its own pose: a squat with the knees out in front, the upper body lowered
+        // and leaning forward over them, rising and sinking a little with each breath and step.
+        // The shoes stay on the floor line (y 150, the same as standing), so the feet never sink.
+        let drop: CGFloat = crouching ? 22 + breath * 1.2 - abs(swing) * 2 : 0
+        // Creeping: one knee and then the other moves forward, its foot lifting a little.
+        let step = CGFloat(swing) * 6
         return ZStack {
             if crouching {
-                bentLeg(shuffle: -swing * 6).position(x: 42, y: 131 - max(0, swing) * 3)
+                crouchLeg(hip: CGPoint(x: 44, y: 126), knee: CGPoint(x: 70 - step, y: 122),
+                          foot: CGPoint(x: 62 - step, y: 142 - max(0, -step) * 0.6), far: true)
                     .transition(.identity)
-                bentLeg(shuffle: swing * 6).position(x: 56, y: 131 - max(0, -swing) * 3)
+                crouchLeg(hip: CGPoint(x: 52, y: 126), knee: CGPoint(x: 80 + step, y: 121),
+                          foot: CGPoint(x: 72 + step, y: 142 - max(0, step) * 0.6), far: false)
                     .transition(.identity)
             } else {
                 leg(swing * 28).position(x: 42, y: 126)
@@ -150,9 +165,9 @@ struct CharacterView: View {
                 Ellipse().fill(shirt).brightness(-0.1).frame(width: 50, height: 30).position(x: 34, y: 62)
             }
             hairBehind
-            arm(backArm).position(x: 50, y: 82)
+            arm(backArm, far: true).position(x: Self.farShoulder, y: 82)
             torso
-            arm(frontArm).position(x: 50, y: 82)
+            arm(frontArm, far: false).position(x: Self.nearShoulder, y: 82)
 
             // Head
             Circle().fill(skin).frame(width: 54, height: 54).position(x: 50, y: 38)
@@ -178,9 +193,9 @@ extension CharacterView {
         switch look.shirtStyle {
         case 1:
             // Hoodie: a pocket and two strings
-            RoundedRectangle(cornerRadius: 6).fill(shirt).brightness(-0.08).frame(width: 30, height: 12).position(x: 54, y: 102)
-            Capsule().fill(.white.opacity(0.85)).frame(width: 2.5, height: 14).position(x: 58, y: 70)
-            Capsule().fill(.white.opacity(0.85)).frame(width: 2.5, height: 12).position(x: 66, y: 70)
+            RoundedRectangle(cornerRadius: 6).fill(shirt).brightness(-0.08).frame(width: 28, height: 12).position(x: 46, y: 102)
+            Capsule().fill(.white.opacity(0.85)).frame(width: 2.5, height: 14).position(x: 44, y: 70)
+            Capsule().fill(.white.opacity(0.85)).frame(width: 2.5, height: 12).position(x: 52, y: 70)
         case 2:
             // Stripes
             ForEach(0..<4, id: \.self) { i in
@@ -188,9 +203,9 @@ extension CharacterView {
             }
         case 3:
             // An open jacket over a white top
-            Rectangle().fill(Color.white.opacity(0.92)).frame(width: 12, height: 50).position(x: 60, y: 86)
+            Rectangle().fill(Color.white.opacity(0.92)).frame(width: 12, height: 50).position(x: 47, y: 86)
+            Rectangle().fill(shirt).brightness(-0.12).frame(width: 3, height: 50).position(x: 41, y: 86)
             Rectangle().fill(shirt).brightness(-0.12).frame(width: 3, height: 50).position(x: 54, y: 86)
-            Rectangle().fill(shirt).brightness(-0.12).frame(width: 3, height: 50).position(x: 67, y: 86)
         default: EmptyView()
         }
         if let id = look.photo, let picture = ShirtPhotos.image(id) {
@@ -200,12 +215,13 @@ extension CharacterView {
                 .frame(width: 22, height: 22)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.7), lineWidth: 1.5))
-                .position(x: 60, y: 82)
+                .position(x: 45, y: 82)
         } else if let pattern, look.shirtStyle != 3 {
+            // In the middle of the chest, where the near arm doesn't cover it.
             Image(systemName: pattern)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(look.shirt == 5 ? Color.white : Palette.gold)
-                .position(x: 63, y: 75)
+                .position(x: 46, y: 77)
         }
     }
 
@@ -218,23 +234,21 @@ extension CharacterView {
             Capsule().fill(.black).frame(width: 9, height: 3).position(x: 71, y: 40)
             Capsule().fill(Color(red: 1, green: 0.4, blue: 0.5)).frame(width: 9, height: 12).position(x: 66, y: 54)
         } else {
-            // Eyes: wider when surprised or scared, half shut when sleepy, narrow when sneaky.
-            let tall: CGFloat = blink ? 1.6 : mood == .surprised || mood == .scared ? 9.5 : mood == .sleepy ? 3 : mood == .sneaky ? 4.5 : 7.5
+            // Soft, round eyes with a shine. A mood changes their shape a little, never into a stare.
             ForEach([56.0, 71.0], id: \.self) { x in
-                ZStack {
-                    Capsule().fill(eyeColor).frame(width: 6.5, height: tall)
-                    if !blink && tall > 4 {
-                        Circle().fill(.white).frame(width: 2.2).offset(x: 1, y: -tall / 4)
-                    }
-                }
-                .position(x: x + glance, y: 40)
+                eye(mood, blink: blink).position(x: x + glance, y: 40)
             }
-            // Eyebrows
-            let tilt: Double = mood == .worried || mood == .scared ? -16 : mood == .cross ? 18 : mood == .sneaky ? 8 : 0
-            let lift: CGFloat = mood == .surprised ? -4 : mood == .scared ? -3 : 0
-            Capsule().fill(hair).brightness(-0.1).frame(width: 9, height: 2.5).rotationEffect(.degrees(tilt)).position(x: 56 + glance * 0.5, y: 32 + lift)
-            Capsule().fill(hair).brightness(-0.1).frame(width: 9, height: 2.5).rotationEffect(.degrees(-tilt)).position(x: 71 + glance * 0.5, y: 32 + lift)
+            // Eyebrows: thin, and only gently tilted.
+            let tilt: Double = mood == .worried ? -10 : mood == .scared ? -12 : mood == .cross ? 12 : mood == .sneaky ? 6 : 0
+            let lift: CGFloat = mood == .surprised ? -2.5 : mood == .scared ? -2 : 0
+            Capsule().fill(hair).brightness(-0.12).frame(width: 8, height: 2).rotationEffect(.degrees(tilt)).position(x: 56 + glance * 0.5, y: 33 + lift)
+            Capsule().fill(hair).brightness(-0.12).frame(width: 8, height: 2).rotationEffect(.degrees(-tilt)).position(x: 71 + glance * 0.5, y: 33 + lift)
             mouth(mood)
+            if mood == .scared {
+                // A little drop of sweat, not a scream.
+                Image(systemName: "drop.fill").font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Color(red: 0.55, green: 0.80, blue: 1.0)).position(x: 80, y: 30)
+            }
         }
         if look.blush {
             Circle().fill(Color.pink.opacity(mood == .happy ? 0.5 : 0.32)).frame(width: 9).position(x: 76, y: 50)
@@ -247,26 +261,57 @@ extension CharacterView {
         }
     }
 
+    /// One eye. Happy eyes are little arcs (^ ^), sleepy ones are shut; the others are round with a shine.
+    @ViewBuilder private func eye(_ mood: Mood, blink: Bool) -> some View {
+        if blink {
+            Capsule().fill(eyeColor).frame(width: 7, height: 1.8)
+        } else if mood == .happy {
+            Circle().trim(from: 0.58, to: 0.92).stroke(eyeColor, style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                .frame(width: 8).offset(y: 2)
+        } else if mood == .sleepy {
+            Circle().trim(from: 0.08, to: 0.42).stroke(eyeColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .frame(width: 7).offset(y: -1)
+        } else {
+            let wide = mood == .surprised || mood == .scared
+            let tall: CGFloat = wide ? 8 : mood == .sneaky ? 4.2 : 7.2
+            ZStack {
+                Capsule().fill(eyeColor).frame(width: wide ? 7.2 : 6.4, height: tall)
+                Circle().fill(.white).frame(width: wide ? 2.8 : 2.3).offset(x: 1.1, y: -tall / 4)
+                if wide { Circle().fill(.white.opacity(0.85)).frame(width: 1.3).offset(x: -1.4, y: tall / 5) }
+            }
+        }
+    }
+
     @ViewBuilder private func mouth(_ mood: Mood) -> some View {
+        let line = Color(red: 0.30, green: 0.16, blue: 0.14).opacity(0.85)
+        let soft = Color(red: 0.75, green: 0.35, blue: 0.38)
         switch mood {
         case .happy:
-            Circle().trim(from: 0.05, to: 0.45).stroke(.black.opacity(0.75), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .frame(width: 16).position(x: 64, y: 46)
+            Circle().trim(from: 0.05, to: 0.45).stroke(line, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .frame(width: 15).position(x: 64, y: 46)
         case .worried:
-            Circle().trim(from: 0.6, to: 0.9).stroke(.black.opacity(0.7), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .frame(width: 14).position(x: 64, y: 56)
-        case .scared, .surprised:
-            Ellipse().fill(Color(red: 0.35, green: 0.10, blue: 0.12)).frame(width: 8, height: mood == .scared ? 9 : 7).position(x: 64, y: 52)
+            Circle().trim(from: 0.64, to: 0.86).stroke(line, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
+                .frame(width: 13).position(x: 64, y: 55)
+        case .scared:
+            // A small wobbly mouth
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: 2)); p.addLine(to: CGPoint(x: 3, y: 0)); p.addLine(to: CGPoint(x: 6, y: 2))
+                p.addLine(to: CGPoint(x: 9, y: 0)); p.addLine(to: CGPoint(x: 12, y: 2))
+            }
+            .stroke(line, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .frame(width: 12, height: 2).position(x: 64, y: 51)
+        case .surprised:
+            Ellipse().fill(soft).frame(width: 5, height: 6).position(x: 64, y: 51)
         case .sneaky:
-            Capsule().fill(.black.opacity(0.7)).frame(width: 10, height: 2.5).rotationEffect(.degrees(-10)).position(x: 66, y: 51)
+            Capsule().fill(line).frame(width: 9, height: 2.2).rotationEffect(.degrees(-10)).position(x: 66, y: 50)
         case .sleepy:
-            Ellipse().fill(Color(red: 0.35, green: 0.10, blue: 0.12).opacity(0.8)).frame(width: 5, height: 5).position(x: 64, y: 52)
+            Ellipse().fill(soft.opacity(0.8)).frame(width: 4, height: 4).position(x: 64, y: 51)
         case .cross:
-            Circle().trim(from: 0.62, to: 0.88).stroke(.black.opacity(0.75), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .frame(width: 12).position(x: 64, y: 57)
+            Circle().trim(from: 0.66, to: 0.84).stroke(line, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
+                .frame(width: 12).position(x: 64, y: 55)
         case .calm:
-            Circle().trim(from: 0.1, to: 0.4).stroke(.black.opacity(0.7), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .frame(width: 14).position(x: 64, y: 47)
+            Circle().trim(from: 0.1, to: 0.4).stroke(line, style: StrokeStyle(lineWidth: 2.3, lineCap: .round))
+                .frame(width: 13).position(x: 64, y: 46.5)
         }
     }
 

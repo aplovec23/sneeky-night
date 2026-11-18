@@ -128,12 +128,27 @@ final class GameEngine {
     /// Lets you taunt even while the game is paused (Mom staring right at you).
     var tauntOnly = false
 
-    /// 0...100. Taunting and running fill it; at 100 someone wakes up.
-    var noise: Double = 0
+    /// 0...100. Taunting and running fill it; at 100 someone wakes up. It changes every frame, so the
+    /// screen watches `noiseShown` (whole percent) instead, and only redraws when that changes.
+    @ObservationIgnored var noise: Double = 0 {
+        didSet {
+            let shown = Int(noise.rounded())
+            if shown != noiseShown { noiseShown = shown }
+        }
+    }
+    var noiseShown = 0
     /// Noise counts double next to a sleeping grown-up.
     var noiseFactor: Double = 1
 
-    var timeLeft: Double = 100
+    /// Seconds on the clock. It changes every frame, so the screen watches `clockSeconds` (what the
+    /// clock shows) instead, and only redraws once a second.
+    @ObservationIgnored var timeLeft: Double = 100 {
+        didSet {
+            let shown = Int(timeLeft.rounded(.up))
+            if shown != clockSeconds { clockSeconds = shown }
+        }
+    }
+    var clockSeconds = 100
     var timerOn = true
     /// False in places with no time limit (the dungeon): the clock isn't shown.
     var showsClock = true
@@ -142,6 +157,9 @@ final class GameEngine {
     var bubble: String?
     var bubbleID = 0
     var nearest: Int?
+    /// What E does right now: the thing you're next to, or the level's stand-anywhere action.
+    /// Worked out once a frame, so the buttons don't have to look through every thing in the room.
+    var prompt: String?
 
     /// Joystick direction, each axis -1...1.
     var stick: CGVector = .zero
@@ -269,6 +287,7 @@ final class GameEngine {
         z = 0
         vz = 0
         nearest = nil
+        prompt = nil
         flying = false
         flyLeft = 0
         loads += 1
@@ -504,6 +523,7 @@ final class GameEngine {
         updateTimers(dt)
         if checkHazards() { return }
         updateNearest()
+        refreshPrompt()
         updateCover()
         updateNoise(dt)
         onTick(dt)
@@ -543,7 +563,7 @@ final class GameEngine {
         if p != player2 { player2 = p }
         let moving = length > 0.15
         if moving != walking2 { walking2 = moving }
-        if abs(v.dx) > 0.1, (v.dx > 0) != facing2Right { facing2Right = v.dx > 0 }
+        if Self.turns(v), (v.dx > 0) != facing2Right { facing2Right = v.dx > 0 }
     }
 
     /// Player 2's "use" button: does whatever E would do where player 2 is standing.
@@ -562,6 +582,7 @@ final class GameEngine {
         // Unless that walked everyone through a door, player 1 goes back to where they were.
         if loads == before { player = p1 }
         updateNearest()
+        refreshPrompt()
     }
 
     private func itemKeys(_ pressed: Set<GCKeyCode>) {
@@ -641,7 +662,7 @@ final class GameEngine {
         if isWalking != walking { walking = isWalking }
         let isSprinting = run && isWalking
         if isSprinting != sprinting { sprinting = isSprinting }
-        if abs(v.dx) > 0.1, (v.dx > 0) != facingRight { facingRight = v.dx > 0 }
+        if Self.turns(v), (v.dx > 0) != facingRight { facingRight = v.dx > 0 }
         if walking && z == 0 {
             stepClock += Double(dt)
             if stepClock > (sprinting ? 0.2 : 0.32) {
@@ -711,6 +732,19 @@ final class GameEngine {
         things[i].hazard?.sound.play()
         onHazard(i)
         return true
+    }
+
+    /// Whether steering this way turns you to face left or right: only when you're really going
+    /// sideways, not when the joystick wobbles a little while you walk up or down.
+    private static func turns(_ v: CGVector) -> Bool {
+        abs(v.dx) >= 0.3 && abs(v.dx) >= abs(v.dy) * 0.4
+    }
+
+    private func refreshPrompt() {
+        var now: String?
+        if let i = nearest, i < things.count { now = things[i].prompt }
+        if now == nil && !hidden { now = defaultPrompt }
+        if now != prompt { prompt = now }
     }
 
     private func updateNearest() {

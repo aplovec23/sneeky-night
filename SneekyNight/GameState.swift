@@ -448,15 +448,25 @@ enum Badge: String, CaseIterable, Identifiable {
     case worldRevolving
     case kittens, dreamer
     case wholeGame
+    case level5, level6, level7, level8, level9, level10
 
     var id: String { rawValue }
+
+    /// The badge for winning a level (Levels 1 to 10).
+    static func forLevel(_ level: Int) -> Badge? {
+        [1: .level1, 2: .level2, 3: .level3, 4: .level4, 5: .level5, 6: .level6, 7: .level7, 8: .level8, 9: .level9, 10: .level10][level]
+    }
+
+    /// Which level this badge is for, if it's a level badge.
+    var levelNumber: Int? { (1...10).first { Badge.forLevel($0) == self } }
 
     /// The groups on the Badges screen.
     static let categories = ["Levels", "Sneaking", "Family", "Secrets", "Collecting", "Special days"]
 
     var category: String {
         switch self {
-        case .level1, .level2, .level3, .level4, .patienceIsKey, .numberOne, .kittens, .wholeGame: "Levels"
+        case .level1, .level2, .level3, .level4, .level5, .level6, .level7, .level8, .level9, .level10,
+             .patienceIsKey, .numberOne, .kittens, .wholeGame: "Levels"
         case .oopsies, .amNotPm, .hiDad, .deadlySqueak, .oldHouse, .tooHard, .shh, .retry, .goAwayMom: "Sneaking"
         case .trolledMom, .funnySon, .friendlyRoute, .crashout, .trolledAgain, .passcode, .fireMusic: "Family"
         case .curiosity, .fly, .owl, .goldenStick, .power, .luckyGuess, .southPark, .worldRevolving, .dreamer: "Secrets"
@@ -465,8 +475,13 @@ enum Badge: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Not possible until a later update. These show up named "soon".
-    var isSoon: Bool { self == .aprilFool || self == .jolly }
+    /// Not possible until a later update. These show up named "soon". A level's badge is "soon"
+    /// until that level exists (Levels 8 to 10 for now).
+    var isSoon: Bool {
+        if self == .aprilFool || self == .jolly { return true }
+        if let level = levelNumber { return !(Levels.all.first { $0.id == level }?.isReady ?? false) }
+        return false
+    }
 
     var name: String {
         if isSoon { return "soon" }
@@ -497,6 +512,12 @@ enum Badge: String, CaseIterable, Identifiable {
         case .level2: return "Level 2"
         case .level3: return "Level 3"
         case .level4: return "Level 4"
+        case .level5: return "Level 5"
+        case .level6: return "Level 6"
+        case .level7: return "Level 7"
+        case .level8: return "Level 8"
+        case .level9: return "Level 9"
+        case .level10: return "Level 10"
         case .power: return "I FEEL DA POWERRRR!!!"
         case .aprilFool: return "Ur a fool"
         case .pumpkins: return "Scary pumpkins"
@@ -546,6 +567,12 @@ enum Badge: String, CaseIterable, Identifiable {
         case .level2: return "Complete Level 2."
         case .level3: return "Complete Level 3."
         case .level4: return "Complete Level 4."
+        case .level5: return "Complete Level 5."
+        case .level6: return "Complete Level 6."
+        case .level7: return "Complete Level 7."
+        case .level8: return "Complete Level 8."
+        case .level9: return "Complete Level 9."
+        case .level10: return "Complete Level 10."
         case .power: return "Collect 10 star balls on the rooftop."
         case .aprilFool: return "Coming in a later update."
         case .pumpkins: return "Play the game on Halloween."
@@ -594,6 +621,12 @@ enum Badge: String, CaseIterable, Identifiable {
         case .level2: "2.circle.fill"
         case .level3: "3.circle.fill"
         case .level4: "4.circle.fill"
+        case .level5: "5.circle.fill"
+        case .level6: "6.circle.fill"
+        case .level7: "7.circle.fill"
+        case .level8: "8.circle.fill"
+        case .level9: "9.circle.fill"
+        case .level10: "10.circle.fill"
         case .power: "star.circle.fill"
         case .aprilFool, .jolly: "hourglass"
         case .multiplayer: "person.2.fill"
@@ -752,8 +785,8 @@ final class GameState {
         if !won.isEmpty { earned.insert(.patienceIsKey) }
         if !learned.isEmpty { earned.insert(.ninja) }
         if !owned.isEmpty { earned.insert(.coolCap) }
-        for (level, badge) in [(1, Badge.level1), (2, .level2), (3, .level3), (4, .level4)] where won.contains(level) {
-            earned.insert(badge)
+        for level in won {
+            if let badge = Badge.forLevel(level), !badge.isSoon { earned.insert(badge) }
         }
         if earned.contains(.fly) || earned.contains(.owl) { earned.insert(.fly) }
         badges = earned
@@ -982,7 +1015,7 @@ final class GameState {
 
     func complete(level: Int) {
         completedLevels.insert(level)
-        if let badge = [1: Badge.level1, 2: .level2, 3: .level3, 4: .level4][level] { award(badge) }
+        if let badge = Badge.forLevel(level) { award(badge) }
     }
 
     func learn(_ skill: Skill) {
